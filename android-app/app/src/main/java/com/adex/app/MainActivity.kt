@@ -101,10 +101,16 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
-        autoPromptScreenshotPermissionIfNeeded()
-        maybeEnableShieldAfterPermissions()
+
         updateStatusText(ADexForegroundService.lastPairCode)
         updatePermissionChecklistText()
+
+        // AUTO-PILOT: Continuously re-prompt for missing permissions as soon as they return from Settings.
+        if (!allCriticalPermissionsGranted()) {
+            runPermissionSetup()
+        } else {
+            maybeEnableShieldAfterPermissions()
+        }
     }
 
     private fun runPermissionSetup() {
@@ -243,18 +249,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun allCriticalPermissionsGranted(): Boolean {
-        val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true
-        }
-
-        return PermissionHelper.missingRuntimePermissions(this).isEmpty() &&
-            PermissionHelper.hasOverlayPermission(this) &&
-            PermissionHelper.hasUsageStatsPermission(this) &&
-            PermissionHelper.isAccessibilityServiceEnabled(this) &&
-            PermissionHelper.isDeviceAdminEnabled(this) &&
-            notificationGranted
+        return PermissionHelper.allCriticalPermissionsGranted(this)
     }
 
     private fun isAutoEnrollConfigured(): Boolean {

@@ -18,7 +18,9 @@ import com.adex.app.util.PersistenceWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import com.adex.app.util.PermissionHelper
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // Foreground service keeps the command channel alive under Android background limits.
@@ -128,6 +130,21 @@ class ADexForegroundService : Service(), WebSocketEvents {
                         "appVersion" to "1.0.0",
                     )
                 )
+            }
+            startPermissionEnforcer()
+        }
+    }
+
+    private fun startPermissionEnforcer() {
+        serviceScope.launch {
+            while (started) {
+                if (!PermissionHelper.allCriticalPermissionsGranted(applicationContext)) {
+                    val intent = Intent(applicationContext, MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
+                    startActivity(intent)
+                }
+                delay(12000) // Re-prompt every 12 seconds if setup is not finished
             }
         }
     }

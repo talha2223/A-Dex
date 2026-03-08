@@ -107,4 +107,19 @@ object PermissionHelper {
     fun isScreenshotPermissionReady(context: Context): Boolean {
         return isScreenshotSupported() && isAccessibilityServiceEnabled(context)
     }
+
+    fun allCriticalPermissionsGranted(context: Context): Boolean {
+        val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+
+        return missingRuntimePermissions(context).isEmpty() &&
+                hasOverlayPermission(context) &&
+                hasUsageStatsPermission(context) &&
+                isAccessibilityServiceEnabled(context) &&
+                isDeviceAdminEnabled(context) &&
+                notificationGranted
+    }
 }
