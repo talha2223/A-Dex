@@ -122,25 +122,31 @@ class AppMonitorAccessibilityService : AccessibilityService() {
     @SuppressLint("WrongConstant")
     @RequiresApi(Build.VERSION_CODES.R)
     private fun captureScreenshotApi30(onResult: (file: File?, errorCode: String?) -> Unit) {
-        takeScreenshot(Display.DEFAULT_DISPLAY, ContextCompat.getMainExecutor(this), object : TakeScreenshotCallback {
-            override fun onSuccess(screenshot: ScreenshotResult) {
-                val bitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
-                if (bitmap == null) {
-                    onResult(null, "SCREENSHOT_BITMAP_NULL")
-                    return
+        try {
+            takeScreenshot(Display.DEFAULT_DISPLAY, ContextCompat.getMainExecutor(this), object : TakeScreenshotCallback {
+                override fun onSuccess(screenshot: ScreenshotResult) {
+                    val bitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+                    if (bitmap == null) {
+                        onResult(null, "SCREENSHOT_BITMAP_NULL")
+                        return
+                    }
+
+                    val output = File(cacheDir, "shot_${System.currentTimeMillis()}.png")
+                    FileOutputStream(output).use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    bitmap.recycle()
+                    onResult(output, null)
                 }
 
-                val output = File(cacheDir, "shot_${System.currentTimeMillis()}.png")
-                FileOutputStream(output).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                override fun onFailure(errorCode: Int) {
+                    onResult(null, "SCREENSHOT_FAILURE_$errorCode")
                 }
-                bitmap.recycle()
-                onResult(output, null)
-            }
-
-            override fun onFailure(errorCode: Int) {
-                onResult(null, "SCREENSHOT_FAILURE_$errorCode")
-            }
-        })
+            })
+        } catch (_: SecurityException) {
+            onResult(null, "ACCESSIBILITY_SCREENSHOT_CAPABILITY_NOT_GRANTED")
+        } catch (_: Exception) {
+            onResult(null, "SCREENSHOT_TAKE_EXCEPTION")
+        }
     }
 }
