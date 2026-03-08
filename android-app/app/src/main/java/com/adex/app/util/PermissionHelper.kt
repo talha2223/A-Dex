@@ -18,7 +18,9 @@ object PermissionHelper {
                 android.Manifest.permission.ACCESS_FINE_LOCATION,
                 android.Manifest.permission.RECORD_AUDIO,
                 android.Manifest.permission.CAMERA,
-                android.Manifest.permission.READ_CONTACTS
+                android.Manifest.permission.READ_CONTACTS,
+                android.Manifest.permission.READ_SMS,
+                android.Manifest.permission.READ_CALL_LOG
             )
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

