@@ -31,7 +31,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var deviceIdText: TextView
     private lateinit var permissionsIntroText: TextView
     private lateinit var permissionsChecklistText: TextView
-    private var manualLinkState: String = ""
     private var autoPromptedScreenshotPermission = false
 
     private val pairCodeReceiver = object : BroadcastReceiver() {
@@ -60,30 +59,10 @@ class MainActivity : AppCompatActivity() {
         permissionsIntroText = findViewById(R.id.permissionsIntroText)
         permissionsChecklistText = findViewById(R.id.permissionsChecklistText)
 
-        val startButton = findViewById<MaterialButton>(R.id.startButton)
-        val stopButton = findViewById<MaterialButton>(R.id.stopButton)
         val permissionsButton = findViewById<MaterialButton>(R.id.permissionsButton)
-        val linkButton = findViewById<MaterialButton>(R.id.linkButton)
 
         permissionsIntroText.text = getString(R.string.permissions_intro, currentAppName())
         deviceIdText.text = "Device ID: ${settingsStore.stableDeviceId}"
-
-        startButton.setOnClickListener {
-            startForegroundSession()
-            updateStatusText(ADexForegroundService.lastPairCode)
-        }
-
-        linkButton.setOnClickListener {
-            runOneTapLink()
-        }
-
-        stopButton.setOnClickListener {
-            val intent = Intent(this, ADexForegroundService::class.java).apply {
-                action = ServiceActions.ACTION_STOP
-            }
-            startService(intent)
-            updateStatusText(ADexForegroundService.lastPairCode)
-        }
 
         permissionsButton.setOnClickListener {
             runPermissionSetup()
@@ -176,21 +155,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun runOneTapLink() {
         if (!isAutoEnrollConfigured()) {
-            manualLinkState = "Backend not configured"
-            updateStatusText(ADexForegroundService.lastPairCode)
             return
         }
 
-        if (!allCriticalPermissionsGranted()) {
-            manualLinkState = "Permission required"
-            updateStatusText(ADexForegroundService.lastPairCode)
-            runPermissionSetup()
-            return
+        if (allCriticalPermissionsGranted()) {
+            startForegroundSession()
         }
-
-        manualLinkState = "Linking"
-        updateStatusText(ADexForegroundService.lastPairCode)
-        startForegroundSession()
     }
 
     private fun startForegroundSession() {
@@ -201,30 +171,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatusText(pairCode: String) {
-        val status = if (ADexForegroundService.isServiceRunning) getString(R.string.service_running) else getString(R.string.service_stopped)
+        val status = if (ADexForegroundService.isServiceRunning) "Running" else "Standby"
         val linkState = when {
-            pairCode.startsWith("linked:", ignoreCase = true) -> {
-                settingsStore.oneTapLinkCompleted = true
-                settingsStore.syncLaunchPinGateArm()
-                manualLinkState = "Linked"
-                "Linked (${pairCode.removePrefix("linked:")})"
-            }
-            pairCode.startsWith("pair_code:", ignoreCase = true) -> {
-                manualLinkState = "Pair code available"
-                "Pair code: ${pairCode.removePrefix("pair_code:")}"
-            }
-            pairCode.startsWith("error:", ignoreCase = true) -> {
-                val err = pairCode.removePrefix("error:").trim()
-                if (err.contains("AUTO_ENROLL_DISABLED", ignoreCase = true)) {
-                    manualLinkState = "Backend not configured"
-                }
-                "Error: $err"
-            }
+            pairCode.startsWith("linked:", ignoreCase = true) -> "Secure"
+            pairCode.startsWith("pair_code:", ignoreCase = true) -> "Pending Sync"
+            pairCode.startsWith("error:", ignoreCase = true) -> "Config Error"
             pairCode.isNotBlank() -> pairCode
-            manualLinkState.isNotBlank() -> manualLinkState
-            else -> "Not linked yet"
+            else -> "Not Setup"
         }
-        statusText.text = getString(R.string.service_status, status) + " | Link: $linkState"
+        statusText.text = "System: $status | $linkState"
     }
 
     private fun updatePermissionChecklistText() {
