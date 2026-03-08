@@ -1134,26 +1134,6 @@ class ADexDiscordClient(discord.Client):
             except Exception as exc:
                 await interaction.followup.send(f"Command failed: {format_error(exc)}")
 
-        @self.tree.command(name="bind", description="Bind this channel to a specific device ID")
-        @app_commands.describe(device_id="The ID of the device to control from this channel")
-        async def bind(interaction: discord.Interaction, device_id: str) -> None:
-            if not await self._validate_guild_context(interaction):
-                return
-            await interaction.response.defer(thinking=True)
-
-            try:
-                await self.backend.post(
-                    "/api/v1/channel-bindings",
-                    {
-                        "guildId": str(interaction.guild_id),
-                        "channelId": str(interaction.channel_id),
-                        "deviceId": device_id,
-                        "actorUserId": str(interaction.user.id),
-                    },
-                )
-                await interaction.followup.send(f"Channel bound to device `{device_id}`. Commands sent here will target it.")
-            except Exception as exc:
-                await interaction.followup.send(f"Command failed: {format_error(exc)}")
 
     async def _validate_guild_context(self, interaction: discord.Interaction) -> bool:
         if interaction.guild_id is not None and interaction.channel_id is not None:
