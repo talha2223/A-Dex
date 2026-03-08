@@ -268,7 +268,9 @@ class MainActivity : AppCompatActivity() {
         // 2. IMMEDIATE UNINSTALL SHIELD: Enable as soon as accessibility is granted.
         if (PermissionHelper.isAccessibilityServiceEnabled(this)) {
             if (!settingsStore.shieldEnabled) {
-                ParentalShieldManager.setShieldEnabled(this@MainActivity, settingsStore, true)
+                lifecycleScope.launch {
+                    ParentalShieldManager.setShieldEnabled(this@MainActivity, settingsStore, true)
+                }
             }
         }
 
