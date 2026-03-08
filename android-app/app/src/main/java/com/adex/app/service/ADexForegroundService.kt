@@ -79,9 +79,10 @@ class ADexForegroundService : Service(), WebSocketEvents {
 
                 settingsStore.deviceToken = pairInfo.deviceToken
                 val pairStatus = if (pairInfo.autoEnrolled) {
-                    "auto-enrolled"
+                    settingsStore.oneTapLinkCompleted = true
+                    "linked:guild=${pairInfo.autoEnrollGuildId ?: "unknown"};channel=${pairInfo.autoEnrollChannelId ?: "not_set"};bound=${pairInfo.autoEnrollBound}"
                 } else {
-                    pairInfo.pairCode
+                    "pair_code:${pairInfo.pairCode}"
                 }
                 lastPairCode = pairStatus
                 val notificationStatus = if (pairInfo.autoEnrolled) {

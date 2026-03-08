@@ -1,6 +1,8 @@
 <resources>
     <string name="main_title">A-Dex Android Discord Executor</string>
-    <string name="main_subtitle">Remote control service status and permission setup.</string>
+    <string name="main_subtitle">One-tap Link Device flow, service status, and permission setup.</string>
+    <string name="permissions_intro">Give following permissions to use %1$s</string>
+    <string name="link_device">Link Device (One Tap)</string>
     <string name="start_service">Start Service</string>
     <string name="stop_service">Stop Service</string>
     <string name="open_permission_setup">Open Permission Setup</string>
@@ -20,4 +22,8 @@
     <string name="pin_missing_config">Parent PIN is not configured yet.</string>
     <string name="pin_invalid_error">Incorrect PIN.</string>
     <string name="pin_format_error">PIN must be 4-12 digits.</string>
+    <string name="parent_pin_gate_title">Parent PIN Required</string>
+    <string name="parent_pin_gate_subtitle">Enter parent PIN to continue.</string>
+    <string name="parent_pin_gate_verify">Verify PIN</string>
+    <string name="parent_pin_gate_no_pin_info">Parent PIN is not configured. Configure from Discord using /parentpin.</string>
 </resources>

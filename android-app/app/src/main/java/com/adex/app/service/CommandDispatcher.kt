@@ -13,8 +13,11 @@ import android.location.LocationManager
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.ToneGenerator
 import android.net.Uri
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
@@ -123,6 +126,16 @@ class CommandDispatcher(
                 "randomquote" -> handleRandomQuote(command)
                 "fakecallui" -> handleFakeCallUi(command)
                 "shakealert" -> handleShakeAlert(command)
+                "vibratepattern" -> handleVibratePattern(command)
+                "beep" -> handleBeep(command)
+                "countdownoverlay" -> handleCountdownOverlay(command)
+                "flashtext" -> handleFlashText(command)
+                "coinflip" -> handleCoinFlip(command)
+                "diceroll" -> handleDiceRoll(command)
+                "randomnumber" -> handleRandomNumber(command)
+                "quicktimer" -> handleQuickTimer(command)
+                "soundfx" -> handleSoundFx(command)
+                "prankscreen" -> handlePrankScreen(command)
                 "show" -> handleShow(command)
                 "message" -> handleMessage(command)
                 "lockapp" -> handleLockApp(command)
@@ -1006,6 +1019,166 @@ class CommandDispatcher(
             "status" -> success(command.commandId, ShakeAlertManager.statusMap())
             else -> error(command.commandId, "ARGUMENT_INVALID", "action must be start|stop|status")
         }
+    }
+
+    private fun handleVibratePattern(command: DeviceCommand): CommandResult {
+        val vibrator = appContext.getSystemService(Vibrator::class.java)
+            ?: return error(command.commandId, "VIBRATOR_NOT_AVAILABLE", "Vibrator service is not available")
+        if (!vibrator.hasVibrator()) {
+            return error(command.commandId, "VIBRATOR_NOT_AVAILABLE", "Device does not support vibration")
+        }
+
+        val raw = command.payload["patternMs"]
+        val patternList = (raw as? List<*>)?.mapNotNull { (it as? Number)?.toLong() ?: it?.toString()?.toLongOrNull() } ?: emptyList()
+        if (patternList.isEmpty()) {
+            return error(command.commandId, "ARGUMENT_REQUIRED", "patternMs must include one or more durations")
+        }
+        val repeat = command.booleanArg("repeat", false)
+        val repeatIndex = if (repeat) 0 else -1
+
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createWaveform(patternList.toLongArray(), repeatIndex))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(patternList.toLongArray(), repeatIndex)
+            }
+        }.getOrElse {
+            return error(command.commandId, "VIBRATE_FAILED", it.message ?: "Failed to vibrate")
+        }
+
+        return success(command.commandId, mapOf("patternMs" to patternList, "repeat" to repeat))
+    }
+
+    private fun handleBeep(command: DeviceCommand): CommandResult {
+        val tone = command.payload["tone"]?.toString()?.trim()?.lowercase(Locale.US) ?: "beep"
+        val count = command.intArg("count", 1).coerceIn(1, 10)
+        val toneType = when (tone) {
+            "beep" -> ToneGenerator.TONE_PROP_BEEP
+            "ack" -> ToneGenerator.TONE_PROP_ACK
+            "alarm" -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD
+            else -> ToneGenerator.TONE_PROP_BEEP
+        }
+
+        commandScope.launch {
+            val generator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
+            repeat(count) { idx ->
+                generator.startTone(toneType, 180)
+                if (idx != count - 1) {
+                    delay(220)
+                }
+            }
+            runCatching { generator.release() }
+        }
+
+        return success(command.commandId, mapOf("tone" to tone, "count" to count))
+    }
+
+    private fun handleCountdownOverlay(command: DeviceCommand): CommandResult {
+        val seconds = command.intArg("seconds", 10).coerceIn(1, 3600)
+        val message = command.payload["message"]?.toString()?.trim().orEmpty().ifBlank { "Break over" }
+        commandScope.launch {
+            delay(seconds * 1000L)
+            val intent = Intent(appContext, MessageOverlayActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(MessageOverlayActivity.EXTRA_TEXT, message)
+                putExtra(MessageOverlayActivity.EXTRA_SECONDS, 8)
+            }
+            appContext.startActivity(intent)
+        }
+        return success(command.commandId, mapOf("seconds" to seconds, "message" to message, "scheduled" to true))
+    }
+
+    private fun handleFlashText(command: DeviceCommand): CommandResult {
+        val text = command.payload["text"]?.toString().orEmpty().trim()
+        if (text.isBlank()) {
+            return error(command.commandId, "ARGUMENT_REQUIRED", "Text is required")
+        }
+        val seconds = command.intArg("seconds", 8).coerceIn(1, 120)
+        val intent = Intent(appContext, MessageOverlayActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(MessageOverlayActivity.EXTRA_TEXT, text)
+            putExtra(MessageOverlayActivity.EXTRA_SECONDS, seconds)
+        }
+        appContext.startActivity(intent)
+        return success(command.commandId, mapOf("shown" to true, "text" to text, "seconds" to seconds))
+    }
+
+    private fun handleCoinFlip(command: DeviceCommand): CommandResult {
+        val result = if (Random.nextBoolean()) "heads" else "tails"
+        return success(command.commandId, mapOf("result" to result))
+    }
+
+    private fun handleDiceRoll(command: DeviceCommand): CommandResult {
+        val sides = command.intArg("sides", 6).coerceIn(2, 100)
+        val count = command.intArg("count", 1).coerceIn(1, 10)
+        val rolls = List(count) { Random.nextInt(1, sides + 1) }
+        return success(command.commandId, mapOf("sides" to sides, "count" to count, "rolls" to rolls, "sum" to rolls.sum()))
+    }
+
+    private fun handleRandomNumber(command: DeviceCommand): CommandResult {
+        val min = command.intArg("min", 1)
+        val max = command.intArg("max", 100)
+        if (max < min) {
+            return error(command.commandId, "ARGUMENT_INVALID", "max must be >= min")
+        }
+        val value = Random.nextInt(min, max + 1)
+        return success(command.commandId, mapOf("min" to min, "max" to max, "value" to value))
+    }
+
+    private fun handleQuickTimer(command: DeviceCommand): CommandResult {
+        val seconds = command.intArg("seconds", 30).coerceIn(1, 3600)
+        val label = command.payload["label"]?.toString()?.trim().orEmpty().ifBlank { "Timer" }
+        commandScope.launch {
+            delay(seconds * 1000L)
+            val intent = Intent(appContext, MessageOverlayActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(MessageOverlayActivity.EXTRA_TEXT, "$label finished")
+                putExtra(MessageOverlayActivity.EXTRA_SECONDS, 6)
+            }
+            appContext.startActivity(intent)
+            runCatching {
+                val generator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
+                generator.startTone(ToneGenerator.TONE_PROP_ACK, 400)
+                generator.release()
+            }
+        }
+        return success(command.commandId, mapOf("seconds" to seconds, "label" to label, "scheduled" to true))
+    }
+
+    private fun handleSoundFx(command: DeviceCommand): CommandResult {
+        val effect = command.payload["effect"]?.toString()?.trim()?.lowercase(Locale.US) ?: "applause"
+        val durationMs = command.intArg("durationMs", 3000).coerceIn(200, 10_000)
+        val toneType = when (effect) {
+            "alarm" -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD
+            "beep" -> ToneGenerator.TONE_PROP_BEEP
+            "applause" -> ToneGenerator.TONE_SUP_CONGESTION
+            else -> ToneGenerator.TONE_PROP_BEEP
+        }
+        commandScope.launch {
+            val generator = ToneGenerator(AudioManager.STREAM_MUSIC, 95)
+            generator.startTone(toneType, durationMs)
+            delay(durationMs.toLong() + 50L)
+            runCatching { generator.release() }
+        }
+        return success(command.commandId, mapOf("effect" to effect, "durationMs" to durationMs))
+    }
+
+    private fun handlePrankScreen(command: DeviceCommand): CommandResult {
+        val mode = command.payload["mode"]?.toString()?.trim()?.lowercase(Locale.US) ?: "glitch"
+        val seconds = command.intArg("seconds", 6).coerceIn(1, 60)
+        val text = when (mode) {
+            "freeze" -> "System UI not responding..."
+            "warning" -> "Warning: High temperature detected!"
+            else -> "GLITCH MODE ACTIVE"
+        }
+        val intent = Intent(appContext, MessageOverlayActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(MessageOverlayActivity.EXTRA_TEXT, text)
+            putExtra(MessageOverlayActivity.EXTRA_SECONDS, seconds)
+        }
+        appContext.startActivity(intent)
+        return success(command.commandId, mapOf("mode" to mode, "seconds" to seconds, "shown" to true))
     }
 
     private suspend fun handleShow(command: DeviceCommand): CommandResult {

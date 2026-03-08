@@ -18,6 +18,9 @@ def brandStorePassword = project.findProperty("brandStorePassword")?.toString()
 def brandKeyAlias = project.findProperty("brandKeyAlias")?.toString()
 def brandKeyPassword = project.findProperty("brandKeyPassword")?.toString()
 def hasBrandSigning = brandStoreFile && brandStorePassword && brandKeyAlias && brandKeyPassword
+def enrollmentToken = (project.findProperty("enrollmentToken")
+    ?: System.getenv("ADEX_ENROLLMENT_TOKEN")
+    ?: "").toString()
 
 android {
     namespace 'com.adex.app'
@@ -47,7 +50,7 @@ android {
         // Backend endpoints are configurable at build time for local host or tunnel use.
         buildConfigField "String", "BACKEND_HTTP_URL", '"https://talhasss-a-dex.hf.space"'
         buildConfigField "String", "BACKEND_WS_URL", '"wss://talhasss-a-dex.hf.space/ws"'
-        buildConfigField "String", "ENROLLMENT_TOKEN", '""'
+        buildConfigField "String", "ENROLLMENT_TOKEN", "\"${enrollmentToken}\""
     }
 
     buildTypes {

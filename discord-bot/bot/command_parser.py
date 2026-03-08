@@ -41,6 +41,16 @@ REMOTE_COMMANDS = {
     "randomquote",
     "fakecallui",
     "shakealert",
+    "vibratepattern",
+    "beep",
+    "countdownoverlay",
+    "flashtext",
+    "coinflip",
+    "diceroll",
+    "randomnumber",
+    "quicktimer",
+    "soundfx",
+    "prankscreen",
     "show",
     "message",
     "lockapp",
@@ -111,6 +121,7 @@ def build_remote_payload(name: str, args: list[str], attachment: dict[str, Any] 
         "location",
         "usage",
         "lockedapps",
+        "coinflip",
     }:
         return {"payload": {}}
 
@@ -336,6 +347,112 @@ def build_remote_payload(name: str, args: list[str], attachment: dict[str, Any] 
         if action not in {"start", "stop", "status"}:
             return {"error": "Usage: !shakealert <start|stop|status>"}
         return {"payload": {"action": action}}
+
+    if name == "vibratepattern":
+        if not args:
+            return {"error": "Usage: !vibratepattern <comma_ms_pattern> [repeat:true|false]"}
+        try:
+            pattern = [int(v.strip()) for v in args[0].split(",") if v.strip()]
+        except ValueError:
+            return {"error": "Usage: !vibratepattern <comma_ms_pattern> [repeat:true|false]"}
+        if not pattern:
+            return {"error": "Usage: !vibratepattern <comma_ms_pattern> [repeat:true|false]"}
+        repeat = len(args) > 1 and args[1].lower() == "true"
+        return {"payload": {"patternMs": pattern, "repeat": repeat}}
+
+    if name == "beep":
+        tone = args[0].lower() if args else "beep"
+        count = 1
+        if len(args) > 1:
+            try:
+                count = int(float(args[1]))
+            except ValueError:
+                return {"error": "Usage: !beep [tone] [count]"}
+        return {"payload": {"tone": tone, "count": count}}
+
+    if name == "countdownoverlay":
+        seconds = 10
+        if args:
+            try:
+                seconds = int(float(args[0]))
+            except ValueError:
+                return {"error": "Usage: !countdownoverlay [seconds] [message]"}
+        message = " ".join(args[1:]).strip() if len(args) > 1 else "Break over"
+        return {"payload": {"seconds": seconds, "message": message}}
+
+    if name == "flashtext":
+        if not args:
+            return {"error": "Usage: !flashtext <text> [seconds]"}
+        seconds = 8
+        text = " ".join(args)
+        if args[-1].isdigit():
+            seconds = int(args[-1])
+            text = " ".join(args[:-1]).strip()
+        if not text:
+            return {"error": "Usage: !flashtext <text> [seconds]"}
+        return {"payload": {"text": text, "seconds": seconds}}
+
+    if name == "diceroll":
+        sides = 6
+        count = 1
+        if len(args) > 0:
+            try:
+                sides = int(float(args[0]))
+            except ValueError:
+                return {"error": "Usage: !diceroll [sides] [count]"}
+        if len(args) > 1:
+            try:
+                count = int(float(args[1]))
+            except ValueError:
+                return {"error": "Usage: !diceroll [sides] [count]"}
+        return {"payload": {"sides": sides, "count": count}}
+
+    if name == "randomnumber":
+        minimum = 1
+        maximum = 100
+        if len(args) > 0:
+            try:
+                minimum = int(float(args[0]))
+            except ValueError:
+                return {"error": "Usage: !randomnumber [min] [max]"}
+        if len(args) > 1:
+            try:
+                maximum = int(float(args[1]))
+            except ValueError:
+                return {"error": "Usage: !randomnumber [min] [max]"}
+        return {"payload": {"min": minimum, "max": maximum}}
+
+    if name == "quicktimer":
+        seconds = 30
+        label = "Timer"
+        if len(args) > 0:
+            try:
+                seconds = int(float(args[0]))
+            except ValueError:
+                return {"error": "Usage: !quicktimer [seconds] [label]"}
+        if len(args) > 1:
+            label = " ".join(args[1:]).strip() or "Timer"
+        return {"payload": {"seconds": seconds, "label": label}}
+
+    if name == "soundfx":
+        effect = args[0].lower() if args else "applause"
+        duration_ms = 3000
+        if len(args) > 1:
+            try:
+                duration_ms = int(float(args[1]))
+            except ValueError:
+                return {"error": "Usage: !soundfx [effect] [duration_ms]"}
+        return {"payload": {"effect": effect, "durationMs": duration_ms}}
+
+    if name == "prankscreen":
+        mode = args[0].lower() if args else "glitch"
+        seconds = 6
+        if len(args) > 1:
+            try:
+                seconds = int(float(args[1]))
+            except ValueError:
+                return {"error": "Usage: !prankscreen [mode] [seconds]"}
+        return {"payload": {"mode": mode, "seconds": seconds}}
 
     if name == "lockapp":
         if not args:

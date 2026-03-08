@@ -85,4 +85,13 @@ object PermissionHelper {
             putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Allow A-Dex to lock the phone remotely.")
         }
     }
+
+    // Accessibility screenshot API is available from Android 11 (API 30).
+    fun isScreenshotSupported(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+    }
+
+    fun isScreenshotPermissionReady(context: Context): Boolean {
+        return isScreenshotSupported() && isAccessibilityServiceEnabled(context)
+    }
 }

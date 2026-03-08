@@ -30,6 +30,8 @@ const config = {
   commandTimeoutSeconds: Number(process.env.COMMAND_TIMEOUT_SECONDS || 90),
   mediaRetentionHours: Number(process.env.MEDIA_RETENTION_HOURS || 24),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES || 10 * 1024 * 1024),
+  backendVersion: process.env.BACKEND_VERSION || '1.0.0',
+  backendBuildTs: process.env.BACKEND_BUILD_TS || String(Date.now()),
 };
 
 module.exports = { config };

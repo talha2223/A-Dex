@@ -43,6 +43,16 @@ const DEVICE_COMMANDS = new Set([
   'randomquote',
   'fakecallui',
   'shakealert',
+  'vibratepattern',
+  'beep',
+  'countdownoverlay',
+  'flashtext',
+  'coinflip',
+  'diceroll',
+  'randomnumber',
+  'quicktimer',
+  'soundfx',
+  'prankscreen',
   'show',
   'message',
   'lockapp',
@@ -73,6 +83,16 @@ function createApiRouter({ store, hub, config, botAuth, deviceAuth, guildAdminAu
       ts: Date.now(),
       onlineDevices: hub.deviceSockets.size,
       botSubscribers: hub.botSockets.size,
+    });
+  });
+
+  router.get('/capabilities', (_req, res) => {
+    const commands = Array.from(DEVICE_COMMANDS).sort();
+    res.json({
+      backendVersion: config.backendVersion,
+      backendBuildTs: config.backendBuildTs,
+      commandCount: commands.length,
+      commands,
     });
   });
 
@@ -207,7 +227,14 @@ function createApiRouter({ store, hub, config, botAuth, deviceAuth, guildAdminAu
     const data = parsed.data;
     const commandName = data.commandName.toLowerCase();
     if (!DEVICE_COMMANDS.has(commandName)) {
-      return res.status(400).json({ error: 'UNKNOWN_COMMAND' });
+      return res.status(400).json({
+        error: 'UNKNOWN_COMMAND',
+        details: {
+          commandName,
+          hint: 'backend_outdated_or_not_synced',
+          supportedCommandCount: DEVICE_COMMANDS.size,
+        },
+      });
     }
 
     const binding = store.getBoundDevice({ guildId: data.guildId, channelId: data.channelId });

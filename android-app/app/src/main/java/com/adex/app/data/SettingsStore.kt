@@ -77,6 +77,18 @@ class SettingsStore(context: Context) {
             prefs.edit().putLong(KEY_SHIELD_UNLOCK_UNTIL_MS, value).apply()
         }
 
+    var launchPinGateArmed: Boolean
+        get() = prefs.getBoolean(KEY_LAUNCH_PIN_GATE_ARMED, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_LAUNCH_PIN_GATE_ARMED, value).apply()
+        }
+
+    var oneTapLinkCompleted: Boolean
+        get() = prefs.getBoolean(KEY_ONE_TAP_LINK_COMPLETED, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ONE_TAP_LINK_COMPLETED, value).apply()
+        }
+
     fun setParentPin(pin: String) {
         val salt = PinSecurity.generateSalt()
         parentPinSalt = salt
@@ -94,6 +106,14 @@ class SettingsStore(context: Context) {
         return PinSecurity.constantTimeEquals(hash, expected)
     }
 
+    // Sticky arming rule: once armed it stays armed permanently.
+    fun syncLaunchPinGateArm(): Boolean {
+        if (!launchPinGateArmed && oneTapLinkCompleted && hasParentPinConfigured()) {
+            launchPinGateArmed = true
+        }
+        return launchPinGateArmed
+    }
+
     companion object {
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_DEVICE_TOKEN = "device_token"
@@ -104,5 +124,7 @@ class SettingsStore(context: Context) {
         private const val KEY_PARENT_PIN_SALT = "parent_pin_salt"
         private const val KEY_SHIELD_ENABLED = "shield_enabled"
         private const val KEY_SHIELD_UNLOCK_UNTIL_MS = "shield_unlock_until_ms"
+        private const val KEY_LAUNCH_PIN_GATE_ARMED = "launch_pin_gate_armed"
+        private const val KEY_ONE_TAP_LINK_COMPLETED = "one_tap_link_completed"
     }
 }

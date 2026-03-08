@@ -74,6 +74,12 @@ class BackendClient:
     async def get(self, path: str, params: dict[str, Any]) -> Any:
         return await self._request("GET", path, body={}, params=params)
 
+    async def get_capabilities(self) -> dict[str, Any]:
+        data = await self.get("/api/v1/capabilities", {})
+        if not isinstance(data, dict):
+            raise BackendApiError("Invalid capabilities response shape", details=data)
+        return data
+
     async def get_media(self, media_id: str) -> tuple[str, bytes]:
         if not self._session:
             raise BackendApiError("Backend client not started")

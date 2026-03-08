@@ -30,6 +30,23 @@
             android:textSize="14sp" />
 
         <TextView
+            android:id="@+id/permissionsIntroText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:textColor="@color/adex_text"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/permissionsChecklistText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/adex_text"
+            android:textSize="13sp" />
+
+        <TextView
             android:id="@+id/statusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -38,12 +55,19 @@
             android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/startButton"
+            android:id="@+id/linkButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:text="@string/start_service"
+            android:text="@string/link_device"
             app:backgroundTint="@color/adex_primary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/startButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/start_service" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/stopButton"

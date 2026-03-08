@@ -2,6 +2,8 @@ import asyncio
 import io
 import json
 import sys
+import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +20,268 @@ except ImportError:
         sys.path.insert(0, str(repo_bot_parent))
     from bot.backend_client import BackendApiError, BackendClient
     from bot.config import Config, load_config
+
+DEVICE_COMMAND_NAMES = {
+    "apps",
+    "open",
+    "lock",
+    "say",
+    "sayurdu",
+    "playaudio",
+    "stopaudio",
+    "pauseaudio",
+    "resumeaudio",
+    "audiostatus",
+    "parentpin",
+    "shield",
+    "screenshot",
+    "files",
+    "filestat",
+    "mkdir",
+    "rename",
+    "move",
+    "delete",
+    "uploadfile",
+    "readtext",
+    "download",
+    "volume",
+    "info",
+    "permstatus",
+    "location",
+    "camerasnap",
+    "contactlookup",
+    "smsdraft",
+    "fileshareintent",
+    "quicklaunch",
+    "torchpattern",
+    "ringtoneprofile",
+    "screentimeoutset",
+    "mediacontrol",
+    "randomquote",
+    "fakecallui",
+    "shakealert",
+    "vibratepattern",
+    "beep",
+    "countdownoverlay",
+    "flashtext",
+    "coinflip",
+    "diceroll",
+    "randomnumber",
+    "quicktimer",
+    "soundfx",
+    "prankscreen",
+    "show",
+    "message",
+    "lockapp",
+    "unlockapp",
+    "lockedapps",
+    "usage",
+}
+
+
+@dataclass
+class LockAppPickerSession:
+    apps: list[dict[str, str]]
+    locked_packages: set[str]
+    query: str = ""
+    page: int = 0
+    page_size: int = 5
+
+    def filtered_apps(self) -> list[dict[str, str]]:
+        if not self.query:
+            return self.apps
+        q = self.query.lower()
+        return [app for app in self.apps if q in app["label"].lower() or q in app["packageName"].lower()]
+
+    def page_count(self) -> int:
+        total = len(self.filtered_apps())
+        if total == 0:
+            return 1
+        return (total + self.page_size - 1) // self.page_size
+
+    def page_items(self) -> list[dict[str, str]]:
+        items = self.filtered_apps()
+        max_page = max(0, self.page_count() - 1)
+        self.page = max(0, min(self.page, max_page))
+        start = self.page * self.page_size
+        return items[start : start + self.page_size]
+
+    def toggle_next_action(self, package_name: str) -> str:
+        return "unlockapp" if package_name in self.locked_packages else "lockapp"
+
+    def apply_toggle(self, package_name: str) -> None:
+        if package_name in self.locked_packages:
+            self.locked_packages.remove(package_name)
+        else:
+            self.locked_packages.add(package_name)
+
+
+class LockAppSearchModal(discord.ui.Modal, title="Search Apps"):
+    query = discord.ui.TextInput(label="Label or package contains", required=False, max_length=80)
+
+    def __init__(self, view: "LockAppPickerView") -> None:
+        super().__init__()
+        self._view = view
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        if not self._view.is_owner(interaction):
+            await interaction.response.send_message("Only the command author can use this picker.", ephemeral=True)
+            return
+        self._view.session.query = str(self.query.value or "").strip()
+        self._view.session.page = 0
+        self._view.rebuild_buttons()
+        if self._view.message:
+            await self._view.message.edit(content=self._view.render_text(), view=self._view)
+        await interaction.response.send_message("Search applied.", ephemeral=True)
+
+
+class LockToggleButton(discord.ui.Button["LockAppPickerView"]):
+    def __init__(self, package_name: str, label: str, is_locked: bool) -> None:
+        action_word = "Unlock" if is_locked else "Lock"
+        style = discord.ButtonStyle.danger if is_locked else discord.ButtonStyle.success
+        safe_label = f"{action_word}: {label}"[:80]
+        super().__init__(style=style, label=safe_label, row=1)
+        self.package_name = package_name
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if self.view is None:
+            return
+        await self.view.handle_toggle(interaction, self.package_name)
+
+
+class LockAppPickerView(discord.ui.View):
+    def __init__(self, client: "ADexDiscordClient", owner_user_id: int, guild_id: int, channel_id: int, session: LockAppPickerSession) -> None:
+        super().__init__(timeout=300)
+        self.client = client
+        self.owner_user_id = owner_user_id
+        self.guild_id = guild_id
+        self.channel_id = channel_id
+        self.session = session
+        self.message: discord.Message | None = None
+        self.rebuild_buttons()
+
+    def is_owner(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.owner_user_id
+
+    def render_text(self) -> str:
+        total = len(self.session.filtered_apps())
+        query_text = self.session.query or "(none)"
+        items = self.session.page_items()
+        lines = [
+            f"Lock App Picker | Query: `{query_text}`",
+            f"Page `{self.session.page + 1}/{self.session.page_count()}` | Total shown: `{total}`",
+            "Use buttons below to lock/unlock.",
+        ]
+        if not items:
+            lines.append("- No apps matched.")
+        else:
+            for item in items:
+                package_name = item["packageName"]
+                status = "LOCKED" if package_name in self.session.locked_packages else "UNLOCKED"
+                lines.append(f"- `{item['label']}` (`{package_name}`) [{status}]")
+        return "\n".join(lines)
+
+    def rebuild_buttons(self) -> None:
+        self.clear_items()
+        self.add_item(LockPageButton("Prev", -1))
+        self.add_item(LockPageButton("Next", 1))
+        self.add_item(LockSearchButton())
+        self.add_item(LockRefreshButton())
+        for app in self.session.page_items():
+            self.add_item(
+                LockToggleButton(
+                    package_name=app["packageName"],
+                    label=app["label"],
+                    is_locked=app["packageName"] in self.session.locked_packages,
+                )
+            )
+
+    async def handle_toggle(self, interaction: discord.Interaction, package_name: str) -> None:
+        if not self.is_owner(interaction):
+            await interaction.response.send_message("Only the command author can use this picker.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            action = self.session.toggle_next_action(package_name)
+            result = await self.client._send_device_command_wait(
+                guild_id=str(self.guild_id),
+                channel_id=str(self.channel_id),
+                discord_user_id=str(interaction.user.id),
+                command_name=action,
+                payload={"packageName": package_name},
+                timeout_seconds=45,
+                silent=True,
+            )
+        except Exception:
+            result = None
+        if result and result.get("status") == "success":
+            self.session.apply_toggle(package_name)
+
+        self.rebuild_buttons()
+        if self.message:
+            await self.message.edit(content=self.render_text(), view=self)
+
+    async def refresh_state(self, interaction: discord.Interaction) -> None:
+        if not self.is_owner(interaction):
+            await interaction.response.send_message("Only the command author can use this picker.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            locked_result = await self.client._send_device_command_wait(
+                guild_id=str(self.guild_id),
+                channel_id=str(self.channel_id),
+                discord_user_id=str(interaction.user.id),
+                command_name="lockedapps",
+                payload={},
+                timeout_seconds=45,
+                silent=True,
+            )
+        except Exception:
+            locked_result = None
+        if locked_result and locked_result.get("status") == "success":
+            locked = locked_result.get("data", {}).get("lockedApps") or []
+            if isinstance(locked, list):
+                self.session.locked_packages = {str(v) for v in locked}
+
+        self.rebuild_buttons()
+        if self.message:
+            await self.message.edit(content=self.render_text(), view=self)
+
+
+class LockPageButton(discord.ui.Button["LockAppPickerView"]):
+    def __init__(self, label: str, direction: int) -> None:
+        super().__init__(style=discord.ButtonStyle.secondary, label=label, row=0)
+        self.direction = direction
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if self.view is None:
+            return
+        if not self.view.is_owner(interaction):
+            await interaction.response.send_message("Only the command author can use this picker.", ephemeral=True)
+            return
+        self.view.session.page += self.direction
+        self.view.rebuild_buttons()
+        await interaction.response.edit_message(content=self.view.render_text(), view=self.view)
+
+
+class LockSearchButton(discord.ui.Button["LockAppPickerView"]):
+    def __init__(self) -> None:
+        super().__init__(style=discord.ButtonStyle.primary, label="Search", row=0)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if self.view is None:
+            return
+        await interaction.response.send_modal(LockAppSearchModal(self.view))
+
+
+class LockRefreshButton(discord.ui.Button["LockAppPickerView"]):
+    def __init__(self) -> None:
+        super().__init__(style=discord.ButtonStyle.secondary, label="Refresh", row=0)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if self.view is None:
+            return
+        await self.view.refresh_state(interaction)
 
 
 
@@ -72,6 +336,11 @@ def format_result_message(result: dict[str, Any]) -> str:
 
     error_code = result.get("errorCode") or "UNKNOWN"
     error_message = result.get("errorMessage") or ""
+    if command_name == "screenshot" and error_code == "ACCESSIBILITY_SERVICE_NOT_ACTIVE":
+        return (
+            f"Command `{command_name}` failed on device `{device_id}`: {error_code}.\n"
+            "Fix: Open the app -> tap `Open Permission Setup` -> enable A-Dex Accessibility Service -> retry `/screenshot`."
+        )
     return f"Command `{command_name}` failed on device `{device_id}`: {error_code} {error_message}".strip()
 
 
@@ -110,10 +379,17 @@ class ADexDiscordClient(discord.Client):
         self.tree = app_commands.CommandTree(self)
         self._backend_event_task: asyncio.Task[None] | None = None
         self._commands_registered = False
+        self._supported_device_commands: set[str] = set(DEVICE_COMMAND_NAMES)
+        self._backend_version = "unknown"
+        self._backend_build_ts = "unknown"
+        self._pending_results: dict[str, asyncio.Future[dict[str, Any]]] = {}
+        self._silent_request_ids: set[str] = set()
 
     async def setup_hook(self) -> None:
         await self.backend.start()
+        await self._load_backend_capabilities()
         self._register_slash_commands()
+        self._prune_unsupported_slash_commands()
         if self.config.discord_guild_id:
             guild = discord.Object(id=self.config.discord_guild_id)
             self.tree.copy_global_to(guild=guild)
@@ -139,10 +415,57 @@ class ADexDiscordClient(discord.Client):
         if self.user:
             print(f"A-Dex bot logged in as {self.user}")
 
+    async def _load_backend_capabilities(self) -> None:
+        try:
+            caps = await self.backend.get_capabilities()
+            commands_raw = caps.get("commands") or []
+            commands = {str(v).strip().lower() for v in commands_raw if str(v).strip()}
+            if commands:
+                self._supported_device_commands = commands
+            self._backend_version = str(caps.get("backendVersion") or "unknown")
+            self._backend_build_ts = str(caps.get("backendBuildTs") or "unknown")
+            unsupported = sorted(DEVICE_COMMAND_NAMES - self._supported_device_commands)
+            print(
+                f"Loaded backend capabilities: version={self._backend_version}, "
+                f"commands={len(self._supported_device_commands)}, unsupported={len(unsupported)}"
+            )
+            if unsupported:
+                print("Unsupported device commands on this backend:", ", ".join(unsupported))
+        except Exception as exc:
+            # Keep bot usable if backend is older and does not expose /capabilities.
+            self._supported_device_commands = set(DEVICE_COMMAND_NAMES)
+            self._backend_version = "unknown"
+            self._backend_build_ts = "unknown"
+            print(f"Capabilities fetch failed; falling back to full command set: {format_error(exc)}")
+
+    def _prune_unsupported_slash_commands(self) -> None:
+        unsupported = sorted(DEVICE_COMMAND_NAMES - self._supported_device_commands)
+        for name in unsupported:
+            self.tree.remove_command(name)
+        if not {"apps", "lockapp", "unlockapp", "lockedapps"}.issubset(self._supported_device_commands):
+            self.tree.remove_command("lockapp_picker")
+        if "permstatus" not in self._supported_device_commands:
+            self.tree.remove_command("setupcheck")
+
+    def _is_supported_device_command(self, command_name: str) -> bool:
+        return command_name.lower() in self._supported_device_commands
+
     def _register_slash_commands(self) -> None:
         if self._commands_registered:
             return
         self._commands_registered = True
+
+        @self.tree.command(name="backendstatus", description="Show backend capability/version status")
+        async def backendstatus(interaction: discord.Interaction) -> None:
+            unsupported = sorted(DEVICE_COMMAND_NAMES - self._supported_device_commands)
+            lines = [
+                f"Backend version: `{self._backend_version}`",
+                f"Build timestamp: `{self._backend_build_ts}`",
+                f"Supported command count: `{len(self._supported_device_commands)}`",
+            ]
+            if unsupported:
+                lines.append(f"Unsupported in this backend: `{', '.join(unsupported[:20])}`")
+            await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
         @self.tree.command(name="apps", description="Return installed apps list")
         async def apps(interaction: discord.Interaction) -> None:
@@ -334,6 +657,48 @@ class ADexDiscordClient(discord.Client):
         async def permstatus(interaction: discord.Interaction) -> None:
             await self._queue_remote_command(interaction, "permstatus", {})
 
+        @self.tree.command(name="setupcheck", description="Human-readable setup checklist for device commands")
+        async def setupcheck(interaction: discord.Interaction) -> None:
+            if not await self._validate_guild_context(interaction):
+                return
+            await interaction.response.defer(thinking=True)
+            try:
+                result = await self._send_device_command_wait(
+                    guild_id=str(interaction.guild_id),
+                    channel_id=str(interaction.channel_id),
+                    discord_user_id=str(interaction.user.id),
+                    command_name="permstatus",
+                    payload={},
+                    timeout_seconds=45,
+                    silent=True,
+                )
+            except Exception as exc:
+                await interaction.followup.send(f"Setup check failed: {format_error(exc)}")
+                return
+            if not result:
+                await interaction.followup.send("Setup check timed out. Try again in a few seconds.")
+                return
+            if result.get("status") != "success":
+                await interaction.followup.send(format_result_message(result))
+                return
+
+            data = result.get("data") or {}
+            runtime = data.get("runtimePermissions") or {}
+            missing = data.get("missingRuntimePermissions") or []
+            lines = [
+                "Setup checklist:",
+                f"- Accessibility service: `{'OK' if data.get('accessibilityServiceEnabled') else 'MISSING'}`",
+                f"- Overlay permission: `{'OK' if data.get('overlayPermission') else 'MISSING'}`",
+                f"- Usage Access: `{'OK' if data.get('usageAccessPermission') else 'MISSING'}`",
+                f"- Device Admin: `{'OK' if data.get('deviceAdminEnabled') else 'MISSING'}`",
+                f"- Runtime permissions summary: `{runtime}`",
+            ]
+            if missing:
+                lines.append(f"- Missing runtime permissions: `{missing}`")
+            if not data.get("accessibilityServiceEnabled"):
+                lines.append("Screenshot fix: open app -> Open Permission Setup -> enable A-Dex Accessibility Service.")
+            await interaction.followup.send("\n".join(lines))
+
         @self.tree.command(name="location", description="Get device GPS location")
         async def location(interaction: discord.Interaction) -> None:
             await self._queue_remote_command(interaction, "location", {})
@@ -442,6 +807,118 @@ class ADexDiscordClient(discord.Client):
         async def shakealert(interaction: discord.Interaction, action: app_commands.Choice[str]) -> None:
             await self._queue_remote_command(interaction, "shakealert", {"action": action.value})
 
+        @self.tree.command(name="vibratepattern", description="Run vibration pattern")
+        @app_commands.describe(pattern_ms="Comma separated milliseconds, e.g. 200,100,200", repeat="Repeat pattern")
+        async def vibratepattern(interaction: discord.Interaction, pattern_ms: str, repeat: bool = False) -> None:
+            try:
+                values = [int(v.strip()) for v in pattern_ms.split(",") if v.strip()]
+            except ValueError:
+                await interaction.response.send_message("Invalid pattern. Use comma-separated integers.", ephemeral=True)
+                return
+            if not values:
+                await interaction.response.send_message("Pattern must include at least one duration.", ephemeral=True)
+                return
+            await self._queue_remote_command(interaction, "vibratepattern", {"patternMs": values, "repeat": repeat})
+
+        @self.tree.command(name="beep", description="Play short beeps on device")
+        @app_commands.describe(tone="Tone style", count="Number of beeps")
+        @app_commands.choices(tone=[
+            app_commands.Choice(name="beep", value="beep"),
+            app_commands.Choice(name="ack", value="ack"),
+            app_commands.Choice(name="alarm", value="alarm"),
+        ])
+        async def beep(
+            interaction: discord.Interaction,
+            tone: app_commands.Choice[str],
+            count: app_commands.Range[int, 1, 10] = 1,
+        ) -> None:
+            await self._queue_remote_command(interaction, "beep", {"tone": tone.value, "count": int(count)})
+
+        @self.tree.command(name="countdownoverlay", description="Countdown then display completion message")
+        @app_commands.describe(seconds="Countdown seconds", message="Completion message")
+        async def countdownoverlay(
+            interaction: discord.Interaction,
+            seconds: app_commands.Range[int, 1, 3600] = 10,
+            message: str = "Break over",
+        ) -> None:
+            await self._queue_remote_command(
+                interaction,
+                "countdownoverlay",
+                {"seconds": int(seconds), "message": message},
+            )
+
+        @self.tree.command(name="flashtext", description="Show full-screen text for a short duration")
+        @app_commands.describe(text="Text to display", seconds="Duration")
+        async def flashtext(
+            interaction: discord.Interaction,
+            text: str,
+            seconds: app_commands.Range[int, 1, 120] = 8,
+        ) -> None:
+            await self._queue_remote_command(interaction, "flashtext", {"text": text, "seconds": int(seconds)})
+
+        @self.tree.command(name="coinflip", description="Flip a coin on device")
+        async def coinflip(interaction: discord.Interaction) -> None:
+            await self._queue_remote_command(interaction, "coinflip", {})
+
+        @self.tree.command(name="diceroll", description="Roll one or more dice")
+        @app_commands.describe(sides="Number of sides per die", count="Number of dice")
+        async def diceroll(
+            interaction: discord.Interaction,
+            sides: app_commands.Range[int, 2, 100] = 6,
+            count: app_commands.Range[int, 1, 10] = 1,
+        ) -> None:
+            await self._queue_remote_command(interaction, "diceroll", {"sides": int(sides), "count": int(count)})
+
+        @self.tree.command(name="randomnumber", description="Generate random number in range")
+        @app_commands.describe(minimum="Minimum", maximum="Maximum")
+        async def randomnumber(
+            interaction: discord.Interaction,
+            minimum: int = 1,
+            maximum: int = 100,
+        ) -> None:
+            await self._queue_remote_command(interaction, "randomnumber", {"min": int(minimum), "max": int(maximum)})
+
+        @self.tree.command(name="quicktimer", description="Set quick timer and notify on device")
+        @app_commands.describe(seconds="Timer duration", label="Timer label")
+        async def quicktimer(
+            interaction: discord.Interaction,
+            seconds: app_commands.Range[int, 1, 3600] = 30,
+            label: str = "Timer",
+        ) -> None:
+            await self._queue_remote_command(interaction, "quicktimer", {"seconds": int(seconds), "label": label})
+
+        @self.tree.command(name="soundfx", description="Play a short sound effect")
+        @app_commands.describe(effect="Effect name", duration_ms="Duration in milliseconds")
+        @app_commands.choices(effect=[
+            app_commands.Choice(name="applause", value="applause"),
+            app_commands.Choice(name="alarm", value="alarm"),
+            app_commands.Choice(name="beep", value="beep"),
+        ])
+        async def soundfx(
+            interaction: discord.Interaction,
+            effect: app_commands.Choice[str],
+            duration_ms: app_commands.Range[int, 200, 10000] = 3000,
+        ) -> None:
+            await self._queue_remote_command(
+                interaction,
+                "soundfx",
+                {"effect": effect.value, "durationMs": int(duration_ms)},
+            )
+
+        @self.tree.command(name="prankscreen", description="Show prank overlay on device")
+        @app_commands.describe(mode="Prank mode", seconds="Duration")
+        @app_commands.choices(mode=[
+            app_commands.Choice(name="glitch", value="glitch"),
+            app_commands.Choice(name="freeze", value="freeze"),
+            app_commands.Choice(name="warning", value="warning"),
+        ])
+        async def prankscreen(
+            interaction: discord.Interaction,
+            mode: app_commands.Choice[str],
+            seconds: app_commands.Range[int, 1, 60] = 6,
+        ) -> None:
+            await self._queue_remote_command(interaction, "prankscreen", {"mode": mode.value, "seconds": int(seconds)})
+
         @self.tree.command(name="show", description="Display an image full-screen on phone")
         @app_commands.describe(seconds="Display duration in seconds", image="Image attachment")
         async def show(
@@ -475,10 +952,22 @@ class ADexDiscordClient(discord.Client):
         async def message(interaction: discord.Interaction, text: str) -> None:
             await self._queue_remote_command(interaction, "message", {"text": text})
 
-        @self.tree.command(name="lockapp", description="Block an app package (parental control)")
-        @app_commands.describe(package_name="Android package name")
-        async def lockapp(interaction: discord.Interaction, package_name: str) -> None:
-            await self._queue_remote_command(interaction, "lockapp", {"packageName": package_name})
+        @self.tree.command(name="lockapp", description="Block app directly or open interactive lock picker")
+        @app_commands.describe(package_name="Android package name (optional for picker)", query="Initial search for picker")
+        async def lockapp(
+            interaction: discord.Interaction,
+            package_name: str | None = None,
+            query: str | None = None,
+        ) -> None:
+            if package_name:
+                await self._queue_remote_command(interaction, "lockapp", {"packageName": package_name})
+                return
+            await self._open_lockapp_picker(interaction, query)
+
+        @self.tree.command(name="lockapp_picker", description="Open interactive lock/unlock picker")
+        @app_commands.describe(query="Initial app search query")
+        async def lockapp_picker(interaction: discord.Interaction, query: str | None = None) -> None:
+            await self._open_lockapp_picker(interaction, query)
 
         @self.tree.command(name="unlockapp", description="Unblock an app package")
         @app_commands.describe(package_name="Android package name")
@@ -633,8 +1122,116 @@ class ADexDiscordClient(discord.Client):
             await interaction.response.send_message("This command can only be used in a guild text channel.", ephemeral=True)
         return False
 
+    async def _open_lockapp_picker(self, interaction: discord.Interaction, query: str | None = None) -> None:
+        if not await self._validate_guild_context(interaction):
+            return
+        await interaction.response.defer(thinking=True)
+        try:
+            apps_result = await self._send_device_command_wait(
+                guild_id=str(interaction.guild_id),
+                channel_id=str(interaction.channel_id),
+                discord_user_id=str(interaction.user.id),
+                command_name="apps",
+                payload={},
+                timeout_seconds=45,
+                silent=True,
+            )
+            locked_result = await self._send_device_command_wait(
+                guild_id=str(interaction.guild_id),
+                channel_id=str(interaction.channel_id),
+                discord_user_id=str(interaction.user.id),
+                command_name="lockedapps",
+                payload={},
+                timeout_seconds=45,
+                silent=True,
+            )
+        except Exception as exc:
+            await interaction.followup.send(f"Failed to initialize lockapp picker: {format_error(exc)}")
+            return
+
+        if not apps_result or apps_result.get("status") != "success":
+            await interaction.followup.send("Failed to load app list for picker. Ensure device is online.")
+            return
+        if not locked_result or locked_result.get("status") != "success":
+            await interaction.followup.send("Failed to load locked apps state for picker.")
+            return
+
+        apps_data = apps_result.get("data", {}).get("apps") or []
+        locked_data = locked_result.get("data", {}).get("lockedApps") or []
+        apps: list[dict[str, str]] = []
+        for item in apps_data:
+            if isinstance(item, dict):
+                label = str(item.get("label") or item.get("packageName") or "Unknown")
+                package = str(item.get("packageName") or "").strip()
+                if package:
+                    apps.append({"label": label, "packageName": package})
+        apps.sort(key=lambda it: it["label"].lower())
+
+        session = LockAppPickerSession(
+            apps=apps,
+            locked_packages={str(v) for v in locked_data if isinstance(v, str)},
+            query=(query or "").strip(),
+        )
+        view = LockAppPickerView(
+            client=self,
+            owner_user_id=interaction.user.id,
+            guild_id=int(interaction.guild_id),
+            channel_id=int(interaction.channel_id),
+            session=session,
+        )
+        message = await interaction.followup.send(view.render_text(), view=view, wait=True)
+        view.message = message
+
+    async def _send_device_command_wait(
+        self,
+        guild_id: str,
+        channel_id: str,
+        discord_user_id: str,
+        command_name: str,
+        payload: dict[str, Any],
+        timeout_seconds: int = 45,
+        silent: bool = False,
+    ) -> dict[str, Any] | None:
+        if command_name.lower() in DEVICE_COMMAND_NAMES and not self._is_supported_device_command(command_name):
+            raise BackendApiError(
+                f"Command `{command_name}` is not supported by this backend deployment",
+                status=400,
+                details={"error": "UNSUPPORTED_BY_BACKEND", "hint": "Deploy newer backend or use /backendstatus"},
+            )
+
+        request_id = str(uuid.uuid4())
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[dict[str, Any]] = loop.create_future()
+        self._pending_results[request_id] = future
+        if silent:
+            self._silent_request_ids.add(request_id)
+
+        try:
+            await self.backend.post(
+                "/api/v1/commands",
+                {
+                    "requestId": request_id,
+                    "guildId": guild_id,
+                    "channelId": channel_id,
+                    "discordUserId": discord_user_id,
+                    "commandName": command_name,
+                    "payload": payload,
+                },
+            )
+            return await asyncio.wait_for(future, timeout=timeout_seconds)
+        finally:
+            self._pending_results.pop(request_id, None)
+            self._silent_request_ids.discard(request_id)
+
     async def _queue_remote_command(self, interaction: discord.Interaction, command_name: str, payload: dict[str, Any]) -> None:
         if not await self._validate_guild_context(interaction):
+            return
+
+        if command_name.lower() in DEVICE_COMMAND_NAMES and not self._is_supported_device_command(command_name):
+            await interaction.response.send_message(
+                f"`{command_name}` is not supported by current backend build. Run `/backendstatus`.",
+                ephemeral=True,
+            )
             return
 
         await interaction.response.defer(thinking=True)
@@ -653,6 +1250,13 @@ class ADexDiscordClient(discord.Client):
             await interaction.followup.send(
                 f"Command queued: `{command_name}` (id: `{response.get('commandId')}`, status: `{response.get('status')}`)."
             )
+        except BackendApiError as exc:
+            if exc.status == 400 and isinstance(exc.details, dict) and exc.details.get("error") == "UNKNOWN_COMMAND":
+                await interaction.followup.send(
+                    f"Command failed: backend outdated / not synced with bot build for `{command_name}`. Run `/backendstatus`."
+                )
+                return
+            await interaction.followup.send(f"Command failed: {format_error(exc)}")
         except Exception as exc:
             await interaction.followup.send(f"Command failed: {format_error(exc)}")
 
@@ -670,6 +1274,15 @@ class ADexDiscordClient(discord.Client):
                 print("Device event:", payload.get("deviceId"), payload.get("eventType"))
 
     async def _publish_command_result(self, payload: dict[str, Any]) -> None:
+        request_id = payload.get("requestId")
+        if isinstance(request_id, str):
+            pending = self._pending_results.get(request_id)
+            if pending and not pending.done():
+                pending.set_result(payload)
+            if request_id in self._silent_request_ids:
+                self._silent_request_ids.discard(request_id)
+                return
+
         channel_id_raw = payload.get("channelId")
         if not channel_id_raw:
             return

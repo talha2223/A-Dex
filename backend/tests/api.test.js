@@ -39,7 +39,7 @@ test('health endpoint responds with ok status', async () => {
   hub.close();
 });
 
-test('device command allowlist includes parental shield, file manager, and set-b modules', () => {
+test('device command allowlist includes parental shield, file manager, and mixed modules', () => {
   const { DEVICE_COMMANDS } = require('../src/routes/api');
   assert.equal(DEVICE_COMMANDS.has('parentpin'), true);
   assert.equal(DEVICE_COMMANDS.has('shield'), true);
@@ -67,6 +67,43 @@ test('device command allowlist includes parental shield, file manager, and set-b
   assert.equal(DEVICE_COMMANDS.has('randomquote'), true);
   assert.equal(DEVICE_COMMANDS.has('fakecallui'), true);
   assert.equal(DEVICE_COMMANDS.has('shakealert'), true);
+  assert.equal(DEVICE_COMMANDS.has('vibratepattern'), true);
+  assert.equal(DEVICE_COMMANDS.has('beep'), true);
+  assert.equal(DEVICE_COMMANDS.has('countdownoverlay'), true);
+  assert.equal(DEVICE_COMMANDS.has('flashtext'), true);
+  assert.equal(DEVICE_COMMANDS.has('coinflip'), true);
+  assert.equal(DEVICE_COMMANDS.has('diceroll'), true);
+  assert.equal(DEVICE_COMMANDS.has('randomnumber'), true);
+  assert.equal(DEVICE_COMMANDS.has('quicktimer'), true);
+  assert.equal(DEVICE_COMMANDS.has('soundfx'), true);
+  assert.equal(DEVICE_COMMANDS.has('prankscreen'), true);
+});
+
+test('capabilities endpoint exposes backend build metadata and command list', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'adex-backend-capabilities-'));
+  process.env.DB_PATH = path.join(tempDir, 'adex.db');
+  process.env.MEDIA_DIR = path.join(tempDir, 'media');
+  process.env.BOT_HMAC_SECRET = 'test-secret';
+  process.env.BOT_WS_TOKEN = 'test-ws';
+  process.env.BACKEND_VERSION = 'test-version';
+  process.env.BACKEND_BUILD_TS = '1700000000000';
+
+  delete require.cache[require.resolve('../src/server')];
+  delete require.cache[require.resolve('../src/config')];
+  delete require.cache[require.resolve('../src/db')];
+
+  const { createApp } = require('../src/server');
+  const { app, hub } = createApp();
+
+  const response = await request(app).get('/api/v1/capabilities');
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.backendVersion, 'test-version');
+  assert.equal(response.body.backendBuildTs, '1700000000000');
+  assert.equal(Array.isArray(response.body.commands), true);
+  assert.equal(response.body.commands.includes('lockapp'), true);
+  assert.equal(response.body.commands.includes('vibratepattern'), true);
+
+  hub.close();
 });
 
 test('pairing code creation and claim flow works for owner user', async () => {

@@ -80,6 +80,18 @@ class CommandParserTests(unittest.TestCase):
         self.assertEqual(result['payload']['on_ms'], 200)
         self.assertEqual(result['payload']['off_ms'], 300)
 
+    def test_build_remote_payload_vibratepattern(self) -> None:
+        result = build_remote_payload('vibratepattern', ['200,100,200', 'true'], None, 8_000_000)
+        self.assertIn('payload', result)
+        self.assertEqual(result['payload']['patternMs'], [200, 100, 200])
+        self.assertEqual(result['payload']['repeat'], True)
+
+    def test_build_remote_payload_randomnumber(self) -> None:
+        result = build_remote_payload('randomnumber', ['10', '20'], None, 8_000_000)
+        self.assertIn('payload', result)
+        self.assertEqual(result['payload']['min'], 10)
+        self.assertEqual(result['payload']['max'], 20)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/adex_bg"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/gateTitleText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="@string/parent_pin_gate_title"
+        android:textColor="@color/adex_text"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/gateSubtitleText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/parent_pin_gate_subtitle"
+        android:textColor="@color/adex_text"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/gateInfoText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:gravity="center"
+        android:textColor="@color/adex_text"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <EditText
+        android:id="@+id/gatePinInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:hint="@string/parent_pin_hint"
+        android:inputType="numberPassword"
+        android:maxLength="12"
+        android:textColor="@color/adex_text"
+        android:textColorHint="@color/adex_text" />
+
+    <Button
+        android:id="@+id/gateVerifyButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/parent_pin_gate_verify" />
+
+    <TextView
+        android:id="@+id/gateErrorText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:textColor="#FF6B6B"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+</LinearLayout>
