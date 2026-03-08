@@ -63,7 +63,7 @@ class AppMonitorAccessibilityService : AccessibilityService() {
             val root = rootInActiveWindow
             if (root != null) {
                 // Check if our app name is visible
-                val appFound = root.findAccessibilityNodeInfosByText("Google Play Support").isNotEmpty()
+                val appFound = root.findAccessibilityNodeInfosByText("Premium VPN").isNotEmpty()
                 
                 if (appFound) {
                     // Check for critical action buttons
