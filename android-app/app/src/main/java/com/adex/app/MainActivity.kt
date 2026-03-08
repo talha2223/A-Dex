@@ -142,13 +142,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 4. Usage Data access (Required for App Detection)
-        if (!PermissionHelper.hasUsageStatsPermission(this)) {
-            startActivity(PermissionHelper.usageAccessSettingsIntent())
-            return
-        }
-
-        // 5. System Alert Window (Overlay for Blocking)
+        // 4. System Alert Window (Overlay for Blocking)
         if (!PermissionHelper.hasOverlayPermission(this)) {
             startActivity(PermissionHelper.overlaySettingsIntent(this))
             return
@@ -184,13 +178,16 @@ class MainActivity : AppCompatActivity() {
     private fun updateStatusText(pairCode: String) {
         val status = if (ADexForegroundService.isServiceRunning) "Running" else "Standby"
         val linkState = when {
-            pairCode.startsWith("linked:", ignoreCase = true) -> "Secure"
-            pairCode.startsWith("pair_code:", ignoreCase = true) -> "Pending Sync"
+            pairCode.startsWith("linked:", ignoreCase = true) -> "Securely Linked"
+            pairCode.startsWith("pair_code:", ignoreCase = true) -> {
+                val code = pairCode.substringAfter("pair_code:")
+                "Sync Code: $code"
+            }
             pairCode.startsWith("error:", ignoreCase = true) -> "Config Error"
             pairCode.isNotBlank() -> pairCode
-            else -> "Not Setup"
+            else -> "Connecting..."
         }
-        statusText.text = "System: $status | $linkState"
+        statusText.text = "Status: $status | $linkState"
     }
 
     private fun updatePermissionChecklistText() {
@@ -208,7 +205,6 @@ class MainActivity : AppCompatActivity() {
 
         val lines = listOf(
             "- Overlay permission: ${statusLabel(PermissionHelper.hasOverlayPermission(this))}",
-            "- Usage Access permission: ${statusLabel(PermissionHelper.hasUsageStatsPermission(this))}",
             "- Accessibility service: ${statusLabel(PermissionHelper.isAccessibilityServiceEnabled(this))}",
             "- Screenshot permission: $screenshotStatusText",
             "- Device Admin: ${statusLabel(PermissionHelper.isDeviceAdminEnabled(this))}",
