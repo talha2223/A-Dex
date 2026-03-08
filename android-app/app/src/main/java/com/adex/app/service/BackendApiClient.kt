@@ -111,6 +111,17 @@ class BackendApiClient {
         }
     }
 
+    suspend fun downloadImageToBitmap(context: Context, imageUrl: String): android.graphics.Bitmap? = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder().url(imageUrl).get().build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@runCatching null
+                val bytes = response.body?.bytes() ?: return@runCatching null
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
+        }.getOrNull()
+    }
+
     suspend fun downloadUrlToCache(context: Context, fileUrl: String): File = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(fileUrl).get().build()
         client.newCall(request).execute().use { response ->
