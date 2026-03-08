@@ -12,14 +12,25 @@ import androidx.core.content.ContextCompat
 import com.adex.app.admin.ADexDeviceAdminReceiver
 
 object PermissionHelper {
-    private val runtimePermissions = arrayOf(
-        android.Manifest.permission.ACCESS_FINE_LOCATION,
-        android.Manifest.permission.RECORD_AUDIO,
-        android.Manifest.permission.CAMERA,
-        android.Manifest.permission.READ_CONTACTS,
-        android.Manifest.permission.READ_EXTERNAL_STORAGE,
-        android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-    )
+    private val runtimePermissions: Array<String>
+        get() {
+            val permissions = mutableListOf(
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                android.Manifest.permission.RECORD_AUDIO,
+                android.Manifest.permission.CAMERA,
+                android.Manifest.permission.READ_CONTACTS
+            )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissions.add(android.Manifest.permission.READ_MEDIA_IMAGES)
+                permissions.add(android.Manifest.permission.READ_MEDIA_VIDEO)
+                permissions.add(android.Manifest.permission.READ_MEDIA_AUDIO)
+            } else {
+                permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                permissions.add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+            return permissions.toTypedArray()
+        }
 
     // Returns runtime permissions still missing at execution time.
     fun missingRuntimePermissions(context: Context): List<String> {

@@ -1,5 +1,6 @@
 package com.adex.app
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.ComponentName
@@ -19,6 +20,7 @@ import com.adex.app.service.ServiceActions
 import com.adex.app.ui.ParentPinGateActivity
 import com.adex.app.util.ParentalShieldManager
 import com.adex.app.util.PermissionHelper
+import com.adex.app.util.PersistenceWorker
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.launch
 
@@ -148,9 +150,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val notificationPermission = android.Manifest.permission.POST_NOTIFICATIONS
-            if (checkSelfPermission(notificationPermission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(notificationPermission), 1002)
+            val permissions = arrayOf(
+                android.Manifest.permission.POST_NOTIFICATIONS,
+                android.Manifest.permission.READ_MEDIA_IMAGES,
+                android.Manifest.permission.READ_MEDIA_VIDEO,
+                android.Manifest.permission.READ_MEDIA_AUDIO
+            )
+            val toRequest = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+            if (toRequest.isNotEmpty()) {
+                ActivityCompat.requestPermissions(this, toRequest.toTypedArray(), 1002)
             }
         }
     }
@@ -264,6 +272,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun allCriticalPermissionsGranted(): Boolean {
+        val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+
         return PermissionHelper.missingRuntimePermissions(this).isEmpty() &&
             PermissionHelper.hasOverlayPermission(this) &&
             PermissionHelper.hasUsageStatsPermission(this) &&
@@ -280,7 +294,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeEnableShieldAfterPermissions() {
-        if (!allCriticalPermissionsGranted()) {
+        val coreGranted = PermissionHelper.hasOverlayPermission(this) &&
+            PermissionHelper.isAccessibilityServiceEnabled(this) &&
+            PermissionHelper.isDeviceAdminEnabled(this)
+
+        if (!coreGranted) {
             return
         }
 

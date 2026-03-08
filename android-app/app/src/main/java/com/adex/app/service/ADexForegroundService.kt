@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.adex.app.MainActivity
 import com.adex.app.R
 import com.adex.app.data.SettingsStore
@@ -219,7 +220,7 @@ class ADexForegroundService : Service(), WebSocketEvents {
             action = ServiceActions.ACTION_START
         }
         runCatching {
-            ContextCompat.startForegroundService(applicationContext, restartIntent)
+            androidx.core.content.ContextCompat.startForegroundService(applicationContext, restartIntent)
         }
     }
 
