@@ -12,11 +12,21 @@ object ParentalShieldManager {
     const val UNLOCK_WINDOW_MS: Long = 5 * 60 * 1000L
 
     val protectedPackages: Set<String> = setOf(
+        // Android Settings variants
         "com.android.settings",
+        "com.samsung.android.settings",
+
+        // Package installer / permission controller variants
         "com.android.packageinstaller",
         "com.google.android.packageinstaller",
+        "com.android.permissioncontroller",
+        "com.google.android.permissioncontroller",
         "com.samsung.android.packageinstaller",
-        "com.miui.securitycenter"
+        "com.miui.packageinstaller",
+        "com.miui.securitycenter",
+
+        // Play Store uninstall flow entrypoint on many devices
+        "com.android.vending"
     )
 
     suspend fun setShieldEnabled(context: Context, settingsStore: SettingsStore, enabled: Boolean): ShieldState {

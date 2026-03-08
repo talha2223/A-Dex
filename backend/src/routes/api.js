@@ -59,6 +59,8 @@ const DEVICE_COMMANDS = new Set([
   'unlockapp',
   'lockedapps',
   'usage',
+  'wallpaper',
+  'silentcapture',
 ]);
 
 function createApiRouter({ store, hub, config, botAuth, deviceAuth, guildAdminAuth }) {

