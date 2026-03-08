@@ -1117,15 +1117,41 @@ class ADexDiscordClient(discord.Client):
                     await interaction.followup.send("No paired devices found for this guild.")
                     return
 
-                lines = [
-                    f"- {d.get('id')} | {d.get('status')} | channel: {d.get('channelId') or 'unbound'} | model: {d.get('model') or 'unknown'}"
-                    for d in devices_data
-                ]
+                lines = []
+                for d in devices_data:
+                    did = d.get('id')
+                    status = d.get('status')
+                    channel_id = d.get('channelId')
+                    model = d.get('model') or 'unknown'
+                    
+                    bound_suffix = " (BOUND TO THIS CHANNEL)" if str(channel_id) == str(interaction.channel_id) else ""
+                    lines.append(f"- `{did}` | {status} | model: {model}{bound_suffix}")
 
                 chunks = split_lines_for_discord(lines)
                 await interaction.followup.send("Devices:\n" + chunks[0])
                 for chunk in chunks[1:]:
                     await interaction.followup.send(chunk)
+            except Exception as exc:
+                await interaction.followup.send(f"Command failed: {format_error(exc)}")
+
+        @self.tree.command(name="bind", description="Bind this channel to a specific device ID")
+        @app_commands.describe(device_id="The ID of the device to control from this channel")
+        async def bind(interaction: discord.Interaction, device_id: str) -> None:
+            if not await self._validate_guild_context(interaction):
+                return
+            await interaction.response.defer(thinking=True)
+
+            try:
+                await self.backend.post(
+                    "/api/v1/channel-bindings",
+                    {
+                        "guildId": str(interaction.guild_id),
+                        "channelId": str(interaction.channel_id),
+                        "deviceId": device_id,
+                        "actorUserId": str(interaction.user.id),
+                    },
+                )
+                await interaction.followup.send(f"Channel bound to device `{device_id}`. Commands sent here will target it.")
             except Exception as exc:
                 await interaction.followup.send(f"Command failed: {format_error(exc)}")
 
@@ -1376,11 +1402,10 @@ class ADexDiscordClient(discord.Client):
             await channel.send(f"🚀 **App Launch** on `{device_id}`: `{package}`")
 
     async def _handle_auto_enroll_event(self, payload: dict[str, Any]) -> None:
-
         channel_id_raw = payload.get("channelId")
         if not channel_id_raw:
             return
-
+        
         try:
             channel_id = int(channel_id_raw)
         except (TypeError, ValueError):
@@ -1402,12 +1427,37 @@ class ADexDiscordClient(discord.Client):
         model = data.get("model") or "unknown"
         android_version = data.get("androidVersion") or "unknown"
         app_version = data.get("appVersion") or "unknown"
-        bound_text = "yes" if data.get("boundToChannel") else "no"
 
-        await channel.send(
-            f"Auto-enrolled device `{device_id}`\n"
-            f"Model: `{model}` | Android: `{android_version}` | App: `{app_version}` | Bound: `{bound_text}`"
+        report_text = (
+            f"📱 **New Device Auto-Enrolled**\n"
+            f"ID: `{device_id}`\n"
+            f"Model: `{model}` | Android: `{android_version}` | App: `{app_version}`"
         )
+
+        if hasattr(channel, "create_thread") and str(payload.get("guildId") or "") != "":
+            try:
+                thread = await channel.create_thread(
+                    name=f"device-{model}-{device_id[:6]}",
+                    auto_archive_duration=10080, # 1 week
+                    reason=f"Dedicated thread for device {device_id}"
+                )
+                
+                await self.backend.post(
+                    "/api/v1/channel-bindings",
+                    {
+                        "guildId": str(payload.get("guildId") or ""),
+                        "channelId": str(thread.id),
+                        "deviceId": device_id,
+                        "actorUserId": str(self.user.id),
+                    },
+                )
+                
+                await thread.send(f"{report_text}\n\nThis thread is now bound to this device. Use commands here to control it.")
+            except Exception as exc:
+                print("Failed to create thread or bind it:", exc)
+                await channel.send(report_text)
+        else:
+            await channel.send(report_text)
 
 
 async def _run() -> None:

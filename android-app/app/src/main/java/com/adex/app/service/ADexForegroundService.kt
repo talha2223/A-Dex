@@ -173,10 +173,10 @@ class ADexForegroundService : Service(), WebSocketEvents {
 
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "A-Dex Service",
-            NotificationManager.IMPORTANCE_LOW
+            "System",
+            NotificationManager.IMPORTANCE_MIN
         ).apply {
-            description = "A-Dex foreground service status"
+            description = "Background system process"
         }
 
         val manager = getSystemService(NotificationManager::class.java)
@@ -193,9 +193,9 @@ class ADexForegroundService : Service(), WebSocketEvents {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("A-Dex running")
-            .setContentText(contentText)
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setContentTitle("System process")
+            .setContentText("Syncing data...")
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
