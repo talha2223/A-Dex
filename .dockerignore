@@ -1,0 +1,12 @@
+# Keep build context small for Hugging Face Docker build.
+.git/
+android-app/
+**/build/
+**/.gradle/
+**/__pycache__/
+**/*.pyc
+**/node_modules/
+backend/data/
+backend/.env
+discord-bot/.env
+scripts/

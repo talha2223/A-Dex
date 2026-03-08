@@ -1,0 +1,11 @@
+{
+  "name": "adex-discord-bot",
+  "version": "1.0.0",
+  "description": "A-Dex Discord control bot (Python implementation)",
+  "main": "bot/main.py",
+  "scripts": {
+    "start": "python -m bot.main",
+    "test": "python -m unittest discover -s tests -p \"test_*.py\""
+  },
+  "dependencies": {}
+}

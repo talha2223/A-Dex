@@ -1,0 +1,13 @@
+{
+  "appName": "A-Dex Pro",
+  "iconSource": "./assets/default-icon.png",
+  "roundIconSource": "./assets/default-icon.png",
+  "applicationIdSuffix": "",
+  "versionNameSuffix": "",
+  "signing": {
+    "keystorePath": "./keystore/release.jks",
+    "keyAlias": "release",
+    "storePasswordEnv": "ADEX_KEYSTORE_PASSWORD",
+    "keyPasswordEnv": "ADEX_KEY_PASSWORD"
+  }
+}

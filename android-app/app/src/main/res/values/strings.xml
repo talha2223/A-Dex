@@ -1,0 +1,23 @@
+<resources>
+    <string name="main_title">A-Dex Android Discord Executor</string>
+    <string name="main_subtitle">Remote control service status and permission setup.</string>
+    <string name="start_service">Start Service</string>
+    <string name="stop_service">Stop Service</string>
+    <string name="open_permission_setup">Open Permission Setup</string>
+    <string name="service_status">Service status: %1$s</string>
+    <string name="service_running">RUNNING</string>
+    <string name="service_stopped">STOPPED</string>
+    <string name="device_admin_label">A-Dex Device Admin</string>
+    <string name="device_admin_description">Allows A-Dex to lock the phone when authorized command is received.</string>
+    <string name="accessibility_service_label">A-Dex App Monitor</string>
+    <string name="accessibility_service_description">Monitors foreground app launches to enforce locked-app overlays.</string>
+    <string name="blocking_title">App Blocked</string>
+    <string name="blocking_message">This app is blocked by parental control policy.</string>
+    <string name="blocking_pin_required">Parent PIN required to access uninstall settings.</string>
+    <string name="blocking_simple_message">This application is blocked by parental control.</string>
+    <string name="parent_pin_hint">Enter parent PIN</string>
+    <string name="unlock_button">Unlock (5 min)</string>
+    <string name="pin_missing_config">Parent PIN is not configured yet.</string>
+    <string name="pin_invalid_error">Incorrect PIN.</string>
+    <string name="pin_format_error">PIN must be 4-12 digits.</string>
+</resources>

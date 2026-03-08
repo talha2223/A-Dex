@@ -1,0 +1,7 @@
+<resources>
+    <color name="adex_bg">#0B132B</color>
+    <color name="adex_surface">#1C2541</color>
+    <color name="adex_primary">#5BC0BE</color>
+    <color name="adex_text">#F4F7FA</color>
+    <color name="adex_danger">#FF5A5F</color>
+</resources>
