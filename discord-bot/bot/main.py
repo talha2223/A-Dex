@@ -1,13 +1,23 @@
 import asyncio
 import io
 import json
+import sys
+from pathlib import Path
 from typing import Any
 
 import discord
 from discord import app_commands
 
-from .backend_client import BackendApiError, BackendClient
-from .config import Config, load_config
+try:
+    from .backend_client import BackendApiError, BackendClient
+    from .config import Config, load_config
+except ImportError:
+    # Supports direct script execution (e.g. Pterodactyl PY_FILE path mode).
+    repo_bot_parent = Path(__file__).resolve().parent.parent
+    if str(repo_bot_parent) not in sys.path:
+        sys.path.insert(0, str(repo_bot_parent))
+    from bot.backend_client import BackendApiError, BackendClient
+    from bot.config import Config, load_config
 
 
 
