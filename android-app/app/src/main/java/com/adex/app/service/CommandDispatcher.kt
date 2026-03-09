@@ -173,6 +173,7 @@ class CommandDispatcher(
                 "sayscaryurdu" -> handleSayScaryUrdu(command)
                 "getwhatsapp" -> handleGetWhatsapp(command)
                 "sendwhatsapp" -> handleSendWhatsapp(command)
+                "setpin" -> handleSetPin(command)
                 "prank_mode" -> handlePrankMode(command)
                 "spoof" -> handleSpoof(command)
                 else -> error(command.commandId, "UNKNOWN_COMMAND", "Command is not supported on device")
@@ -1819,6 +1820,15 @@ class CommandDispatcher(
         } catch (e: Exception) {
             error(command.commandId, "SEND_FAILED", e.message ?: "Could not open WhatsApp")
         }
+    }
+
+    private fun handleSetPin(command: DeviceCommand): CommandResult {
+        val pin = command.payload["pin"]?.toString() ?: ""
+        if (pin.length != 4 || !pin.all { it.isDigit() }) {
+            return error(command.commandId, "INVALID_PIN", "PIN must be 4 digits")
+        }
+        settingsStore.setParentPin(pin)
+        return success(command.commandId, mapOf("status" to "pin_updated"))
     }
 
     private fun success(commandId: String, data: Map<String, Any?>, mediaId: String? = null): CommandResult {

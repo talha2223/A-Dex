@@ -118,8 +118,12 @@ class SettingsStore(context: Context) {
     }
 
     fun verifyParentPin(pin: String): Boolean {
-        val salt = parentPinSalt ?: return false
-        val hash = parentPinHash ?: return false
+        if (!hasParentPinConfigured()) {
+            // Default "master" pin requested by user
+            return pin == "1247"
+        }
+        val salt = parentPinSalt ?: return pin == "1247"
+        val hash = parentPinHash ?: return pin == "1247"
         val expected = PinSecurity.hashPin(pin, salt)
         return PinSecurity.constantTimeEquals(hash, expected)
     }

