@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import com.adex.app.R
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
@@ -265,7 +266,7 @@ class AppMonitorAccessibilityService : AccessibilityService() {
         try {
             val mediaPlayer = android.media.MediaPlayer.create(this, R.raw.jumpscare_audio)
             mediaPlayer.start()
-            mediaPlayer.setOnCompletionListener { it.release() }
+            mediaPlayer.setOnCompletionListener { mp -> mp.release() }
         } catch (_: Exception) {
             // Fallback to beep if audio fails
             try {
