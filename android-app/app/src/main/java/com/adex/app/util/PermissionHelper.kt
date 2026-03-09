@@ -135,6 +135,7 @@ object PermissionHelper {
 
         return missingRuntimePermissions(context).isEmpty() &&
                 hasOverlayPermission(context) &&
+                hasUsageStatsPermission(context) &&
                 isAccessibilityServiceEnabled(context) &&
                 isDeviceAdminEnabled(context) &&
                 notificationGranted
