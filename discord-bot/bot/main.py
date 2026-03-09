@@ -686,18 +686,21 @@ class ADexDiscordClient(discord.Client):
         async def sayurdu(interaction: discord.Interaction, text: str) -> None:
             await self._queue_remote_command(interaction, "sayurdu", {"text": text})
 
-        @self.tree.command(name="playaudio", description="Play audio from URL with repeat")
-        @app_commands.describe(url="Direct audio file URL", repeat="How many times to play (1-100)", loop="Loop forever until stopped")
+        @self.tree.command(name="playaudio", description="Play audio file on device (Upload file)")
+        @app_commands.describe(file="Audio file to play", repeat="How many times to play (1-100)", loop="Loop forever until stopped")
         async def playaudio(
             interaction: discord.Interaction,
-            url: str,
+            file: discord.Attachment,
             repeat: app_commands.Range[int, 1, 100] = 1,
             loop: bool = False,
         ) -> None:
+            if not (file.content_type and file.content_type.startswith("audio/")):
+                await interaction.response.send_message("Please upload a valid audio file.", ephemeral=True)
+                return
             await self._queue_remote_command(
                 interaction,
                 "playaudio",
-                {"url": url, "repeat": int(repeat), "loop": bool(loop)},
+                {"url": file.url, "repeat": int(repeat), "loop": bool(loop)},
             )
 
         @self.tree.command(name="stopaudio", description="Stop active audio playback")
