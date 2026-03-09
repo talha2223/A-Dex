@@ -475,6 +475,19 @@ function createStore(db, runtimeConfig) {
     return path.join(runtimeConfig.mediaDir, fileName);
   }
 
+  function getEventsForDevice(deviceId, limit = 50) {
+    return db.prepare(
+      `SELECT action, metadata_json as metadata, created_at as ts
+       FROM audit_logs
+       WHERE target = ? AND action LIKE 'device.event.%'
+       ORDER BY created_at DESC
+       LIMIT ?`
+    ).all(deviceId, limit).map(row => ({
+      ...row,
+      metadata: parseJson(row.metadata)
+    }));
+  }
+
   return {
     registerOrRefreshDevice,
     validateDeviceToken,
@@ -506,6 +519,7 @@ function createStore(db, runtimeConfig) {
     pruneExpiredPairCodes,
     getDataPathForMediaFile,
     logAudit,
+    getEventsForDevice,
   };
 }
 

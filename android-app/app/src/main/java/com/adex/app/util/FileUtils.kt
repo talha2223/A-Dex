@@ -3,11 +3,15 @@ package com.adex.app.util
 import android.content.Context
 import android.os.Environment
 import android.webkit.MimeTypeMap
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.charset.Charset
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.math.max
 
 enum class FileSortBy {
@@ -405,5 +409,21 @@ object FileUtils {
 
         val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
         return mime ?: "application/octet-stream"
+    }
+
+    fun zipFiles(files: List<File>, zipFile: File) {
+        ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { out ->
+            for (file in files) {
+                if (!file.exists() || !file.isFile) continue
+                FileInputStream(file).use { fi ->
+                    BufferedInputStream(fi).use { origin ->
+                        val entry = ZipEntry(file.name)
+                        out.putNextEntry(entry)
+                        origin.copyTo(out)
+                        out.closeEntry()
+                    }
+                }
+            }
+        }
     }
 }
