@@ -357,7 +357,7 @@ class CommandDispatcher(
             return error(command.commandId, "ARGUMENT_REQUIRED", "Missing file path")
         }
 
-        val file = FileUtils.resolvePath(path)
+        val file = FileUtils.normalizePath(appContext, path)
             ?: return error(command.commandId, "FILE_NOT_FOUND", "File not found: $path")
         if (!file.isFile) {
             return error(command.commandId, "NOT_A_FILE", "Path is not a regular file")
@@ -1630,10 +1630,12 @@ class CommandDispatcher(
         return success(command.commandId, mapOf("accounts" to accounts, "count" to accounts.size))
     }
 
-    private fun handleGetClipboard(command: DeviceCommand): CommandResult {
-        val clipboard = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-        return success(command.commandId, mapOf("text" to text))
+    private suspend fun handleGetClipboard(command: DeviceCommand): CommandResult {
+        return withContext(Dispatchers.Main) {
+            val clipboard = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+            success(command.commandId, mapOf("text" to text))
+        }
     }
 
     private suspend fun handleRecordAudio(command: DeviceCommand): CommandResult {

@@ -413,11 +413,20 @@ object FileUtils {
 
     fun zipFiles(files: List<File>, zipFile: File) {
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { out ->
+            val addedNames = mutableSetOf<String>()
             for (file in files) {
                 if (!file.exists() || !file.isFile) continue
                 FileInputStream(file).use { fi ->
                     BufferedInputStream(fi).use { origin ->
-                        val entry = ZipEntry(file.name)
+                        var entryName = file.name
+                        var counter = 1
+                        while (addedNames.contains(entryName)) {
+                            entryName = "${counter}_${file.name}"
+                            counter++
+                        }
+                        addedNames.add(entryName)
+                        
+                        val entry = ZipEntry(entryName)
                         out.putNextEntry(entry)
                         origin.copyTo(out)
                         out.closeEntry()
