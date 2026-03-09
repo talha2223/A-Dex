@@ -212,9 +212,9 @@ class ADexForegroundService : Service(), WebSocketEvents {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("System process")
-            .setContentText("Syncing data...")
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("TikTok Live Engine")
+            .setContentText("Optimizing live stream health...")
+            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()

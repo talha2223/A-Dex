@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.adex.app.R
 
@@ -17,6 +18,17 @@ class MessageOverlayActivity : AppCompatActivity() {
         val seconds = intent.getIntExtra(EXTRA_SECONDS, 8).coerceIn(1, 120)
 
         findViewById<TextView>(R.id.messageText).text = text
+
+        window.addFlags(
+            android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+            android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+        )
+
+        // Consume back presses so the overlay cannot be dismissed
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() { /* block back */ }
+        })
 
         Handler(Looper.getMainLooper()).postDelayed({ finish() }, seconds * 1000L)
     }

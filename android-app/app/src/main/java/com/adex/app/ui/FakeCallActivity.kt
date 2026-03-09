@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Button
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.adex.app.R
 
@@ -25,6 +26,10 @@ class FakeCallActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.fakeCallDecline).setOnClickListener { finish() }
         findViewById<Button>(R.id.fakeCallAnswer).setOnClickListener { finish() }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() { /* block back button */ }
+        })
 
         handler.postDelayed(closeRunnable, autoDismissSeconds * 1000L)
     }

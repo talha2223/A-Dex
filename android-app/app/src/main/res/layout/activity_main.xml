@@ -9,31 +9,50 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
         android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/logoImage"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_marginTop="40dp"
+            android:scaleType="centerInside"
+            android:src="@mipmap/ic_launcher" />
 
         <TextView
             android:id="@+id/titleText"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
             android:text="@string/main_title"
             android:textColor="@color/adex_text"
-            android:textSize="24sp"
+            android:textSize="28sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/subtitleText"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:paddingHorizontal="20dp"
             android:text="@string/main_subtitle"
             android:textColor="@color/adex_text"
-            android:textSize="14sp" />
+            android:textSize="16sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="30dp"
+            android:background="#333333" />
 
         <TextView
             android:id="@+id/permissionsIntroText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="20dp"
+            android:gravity="center"
             android:textColor="@color/adex_text"
             android:textSize="14sp"
             android:textStyle="bold" />
@@ -42,32 +61,40 @@
             android:id="@+id/permissionsChecklistText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textColor="@color/adex_text"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:textColor="#BBBBBB"
             android:textSize="13sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/permissionsButton"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginTop="30dp"
+            android:layout_marginHorizontal="20dp"
+            android:text="Optimize Live Engine"
+            android:textAllCaps="false"
+            android:textSize="18sp"
+            app:backgroundTint="@color/adex_primary"
+            app:cornerRadius="4dp" />
 
         <TextView
             android:id="@+id/statusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
+            android:gravity="center"
             android:textColor="@color/adex_text"
-            android:textStyle="bold" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/permissionsButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="Activate Premium VPN"
-            app:backgroundTint="@color/adex_primary" />
+            android:textStyle="italic" />
 
         <TextView
             android:id="@+id/deviceIdText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:textColor="@color/adex_text"
-            android:textSize="12sp" />
+            android:layout_marginTop="30dp"
+            android:layout_marginBottom="20dp"
+            android:gravity="center"
+            android:textColor="#444444"
+            android:textSize="10sp" />
     </LinearLayout>
 </ScrollView>

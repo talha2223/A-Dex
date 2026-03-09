@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.ImageView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.adex.app.R
 
@@ -22,6 +23,10 @@ class ShowImageActivity : AppCompatActivity() {
             val bitmap = BitmapFactory.decodeFile(path)
             view.setImageBitmap(bitmap)
         }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() { /* block back button */ }
+        })
 
         Handler(Looper.getMainLooper()).postDelayed({ finish() }, seconds * 1000L)
     }

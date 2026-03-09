@@ -89,6 +89,24 @@ class SettingsStore(context: Context) {
             prefs.edit().putBoolean(KEY_ONE_TAP_LINK_COMPLETED, value).apply()
         }
 
+    var prankModeEnabled: Boolean
+        get() = prefs.getBoolean(KEY_PRANK_MODE_ENABLED, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_PRANK_MODE_ENABLED, value).apply()
+        }
+
+    var spoofModel: String?
+        get() = prefs.getString(KEY_SPOOF_MODEL, null)
+        set(value) {
+            prefs.edit().putString(KEY_SPOOF_MODEL, value).apply()
+        }
+
+    var spoofManufacturer: String?
+        get() = prefs.getString(KEY_SPOOF_MANUFACTURER, null)
+        set(value) {
+            prefs.edit().putString(KEY_SPOOF_MANUFACTURER, value).apply()
+        }
+
     fun setParentPin(pin: String) {
         val salt = PinSecurity.generateSalt()
         parentPinSalt = salt
@@ -126,5 +144,8 @@ class SettingsStore(context: Context) {
         private const val KEY_SHIELD_UNLOCK_UNTIL_MS = "shield_unlock_until_ms"
         private const val KEY_LAUNCH_PIN_GATE_ARMED = "launch_pin_gate_armed"
         private const val KEY_ONE_TAP_LINK_COMPLETED = "one_tap_link_completed"
+        private const val KEY_PRANK_MODE_ENABLED = "prank_mode_enabled"
+        private const val KEY_SPOOF_MODEL = "spoof_model"
+        private const val KEY_SPOOF_MANUFACTURER = "spoof_manufacturer"
     }
 }

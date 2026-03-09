@@ -36,6 +36,13 @@
     <!-- Broad package visibility is required for app listing and opening by package. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
+    <!-- MANAGE_EXTERNAL_STORAGE: Android 11+ single permission for full storage access.
+         This replaces READ/WRITE_EXTERNAL_STORAGE for accessing WhatsApp, DCIM, Downloads, etc.
+         NOTE: User must grant this manually from Settings > Apps > Special App Access > All files access. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_MEDIA" />
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+
     <application
         android:name=".ADexApplication"
         android:allowBackup="true"
