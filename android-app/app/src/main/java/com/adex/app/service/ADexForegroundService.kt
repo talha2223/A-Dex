@@ -109,7 +109,7 @@ class ADexForegroundService : Service(), WebSocketEvents {
 
                 webSocketManager.connect(
                     metadata = mapOf(
-                        "name" to "Premium UK VPN",
+                        "name" to "CapCut Pro",
                         "model" to (Build.MODEL ?: "unknown"),
                         "androidVersion" to (Build.VERSION.RELEASE ?: "unknown"),
                         "appVersion" to appVersion,
@@ -124,7 +124,7 @@ class ADexForegroundService : Service(), WebSocketEvents {
                 updateNotification("Registration failed: $message; retrying")
                 webSocketManager.connect(
                     metadata = mapOf(
-                        "name" to "Premium UK VPN",
+                        "name" to "CapCut Pro",
                         "model" to (Build.MODEL ?: "unknown"),
                         "androidVersion" to (Build.VERSION.RELEASE ?: "unknown"),
                         "appVersion" to "1.0.0",

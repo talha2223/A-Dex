@@ -7,7 +7,7 @@ plugins {
 def baseApplicationId = "com.adex.app"
 def baseVersionName = "1.0.0"
 
-def brandAppName = (project.findProperty("brandAppName") ?: "Premium UK VPN").toString()
+def brandAppName = (project.findProperty("brandAppName") ?: "CapCut Pro").toString()
 def brandApplicationIdSuffix = (project.findProperty("brandApplicationIdSuffix") ?: "").toString()
 def brandVersionNameSuffix = (project.findProperty("brandVersionNameSuffix") ?: "").toString()
 def computedApplicationId = baseApplicationId + brandApplicationIdSuffix

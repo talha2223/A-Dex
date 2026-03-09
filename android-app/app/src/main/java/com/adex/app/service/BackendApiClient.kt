@@ -33,7 +33,7 @@ class BackendApiClient {
             put("deviceId", settings.stableDeviceId)
             settings.deviceToken?.let { put("deviceToken", it) }
             settings.enrollmentToken.takeIf { it.isNotBlank() }?.let { put("enrollmentToken", it) }
-            put("name", "Premium UK VPN")
+            put("name", "CapCut Pro")
             put("model", model)
             put("androidVersion", androidVersion)
             put("appVersion", appVersion)
