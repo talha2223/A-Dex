@@ -908,10 +908,16 @@ class ADexDiscordClient(discord.Client):
         ) -> None:
             await self._queue_remote_command(interaction, "readtext", {"path": path, "maxChars": int(max_chars)})
 
-        @self.tree.command(name="download", description="Download file from device path")
-        @app_commands.describe(path="Absolute file path on device")
+        @self.tree.command(name="download", description="Download a file from device to Discord")
+        @app_commands.describe(path="Path to file")
         async def download(interaction: discord.Interaction, path: str) -> None:
-            await self._queue_remote_command(interaction, "download", {"path": path})
+            # Temporary workaround for Android App Bug: Prepend /sdcard/ to relative paths
+            if not path.startswith("/") and not path.startswith("storage/"):
+                path_to_send = f"/sdcard/{path}"
+            else:
+                path_to_send = path
+                
+            await self._queue_remote_command(interaction, "download", {"path": path_to_send})
 
         @self.tree.command(name="volume", description="Set volume 0-100")
         @app_commands.describe(value="Volume percentage")
