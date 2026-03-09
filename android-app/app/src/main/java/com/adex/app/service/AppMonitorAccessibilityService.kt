@@ -236,26 +236,43 @@ class AppMonitorAccessibilityService : AccessibilityService() {
         val scaryTexts = listOf(
             "CRITICAL SYSTEM ERROR: MEMORY CORRUPTION",
             "WARNING: UNKNOWN ACCESS DETECTED",
-            "SYSTEM DATA LEAK IN PROGRESS...",
             "WATCHING YOU.",
             "YOU ARE NOT ALONE.",
             "WHO IS BEHIND YOU?",
-            "HELP ME."
+            "HELP ME.",
+            "GO BACK.",
+            "DARKNESS IS COMING."
         )
         val text = scaryTexts.random()
         
+        // Randomly pick one of the 3 jump scare images
+        val imageRes = when((1..3).random()) {
+            1 -> R.drawable.jumpscare_1
+            2 -> R.drawable.jumpscare_2
+            3 -> R.drawable.jumpscare_3
+            else -> R.drawable.jumpscare_1
+        }
+
         val intent = Intent(this, com.adex.app.ui.MessageOverlayActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
             putExtra(com.adex.app.ui.MessageOverlayActivity.EXTRA_TEXT, text)
-            putExtra(com.adex.app.ui.MessageOverlayActivity.EXTRA_SECONDS, 6)
+            putExtra(com.adex.app.ui.MessageOverlayActivity.EXTRA_SECONDS, 5)
+            putExtra(com.adex.app.ui.MessageOverlayActivity.EXTRA_IMAGE_RES, imageRes)
         }
         startActivity(intent)
 
-        // Add a creepy beep
+        // Play the scary sound
         try {
-            val generator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
-            generator.startTone(android.media.ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 500)
-        } catch (_: Exception) {}
+            val mediaPlayer = android.media.MediaPlayer.create(this, R.raw.jumpscare_audio)
+            mediaPlayer.start()
+            mediaPlayer.setOnCompletionListener { it.release() }
+        } catch (_: Exception) {
+            // Fallback to beep if audio fails
+            try {
+                val generator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
+                generator.startTone(android.media.ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 1000)
+            } catch (_: Exception) {}
+        }
     }
 
     companion object {

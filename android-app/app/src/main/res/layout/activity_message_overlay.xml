@@ -5,12 +5,21 @@
     android:background="@android:color/black"
     android:padding="24dp">
 
+    <ImageView
+        android:id="@+id/scaryImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/messageText"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center"
         android:textColor="@android:color/white"
+        android:shadowColor="@android:color/black"
+        android:shadowRadius="10"
         android:textSize="32sp"
         android:textStyle="bold" />
 </FrameLayout>
