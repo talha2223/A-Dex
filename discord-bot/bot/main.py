@@ -1578,7 +1578,7 @@ class ADexDiscordClient(discord.Client):
                 return
             await interaction.response.defer(thinking=True)
             try:
-                data = await self.backend.get("/api/v1/devices", {"guildId": str(interaction.guild_id)})
+                data = await self.backend.get("/api/v1/devices", {"guildId": str(interaction.guild_id), "discordUserId": str(interaction.user.id)})
                 devices = data.get("devices", [])
                 
                 if filter.value == "online":
