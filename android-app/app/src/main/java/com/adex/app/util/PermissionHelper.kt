@@ -95,7 +95,7 @@ object PermissionHelper {
         val component = ComponentName(context, ADexDeviceAdminReceiver::class.java)
         return Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
-            putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Allow A-Dex to lock the phone remotely.")
+            putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Allow Pakistani Guitar Store to lock the phone remotely.")
         }
     }
 

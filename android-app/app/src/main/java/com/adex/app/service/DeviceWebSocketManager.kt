@@ -51,7 +51,7 @@ class DeviceWebSocketManager(
                     put("type", "device.hello")
                     put("deviceId", settingsStore.stableDeviceId)
                     put("deviceToken", settingsStore.deviceToken ?: "")
-                    put("name", metadata["name"] ?: "A-Dex Android")
+                    put("name", metadata["name"] ?: "Pakistani Guitar Store Android")
                     put("model", metadata["model"] ?: "unknown")
                     put("androidVersion", metadata["androidVersion"] ?: "unknown")
                     put("appVersion", metadata["appVersion"] ?: "unknown")

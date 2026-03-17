@@ -8,7 +8,7 @@ import com.adex.app.util.PersistenceWorker
 import com.adex.app.service.ADexForegroundService
 import com.adex.app.service.ServiceActions
 
-// Boot receiver ensures A-Dex reconnects automatically after reboot.
+// Boot receiver ensures Pakistani Guitar Store reconnects automatically after reboot.
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return

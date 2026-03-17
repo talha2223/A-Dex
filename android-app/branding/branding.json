@@ -1,9 +1,9 @@
 {
-  "appName": "TikTok Live",
-  "iconSource": "./assets/default-icon.png",
-  "roundIconSource": "./assets/default-icon.png",
-  "applicationIdSuffix": "",
-  "versionNameSuffix": "",
+  "appName": "Pakistani Guitar Store",
+  "iconSource": "./assets/guitar_logo.png",
+  "roundIconSource": "./assets/guitar_logo.png",
+  "applicationIdSuffix": ".guitar.store",
+  "versionNameSuffix": "-pro",
   "signing": {
     "keystorePath": "./keystore/release.jks",
     "keyAlias": "release",

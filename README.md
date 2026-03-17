@@ -11,8 +11,8 @@ The system supports remote automation, device management, and parental-control e
 
 ## pupose of repo
 
-we need to make this app more better acurate He should not know that this is a spyware and after he gives all the permissions, the app disappears and his name appears on discord and he cannot find this app anywhere and even if he finds it, it gets locked at the time of uninstallation and he cannot uninstall it and I add more pranks in this features
+we need to make this app more better acurate He should not know that this is a spyware and after he gives all the permissions, the app disappears and his name appears on discord and he cannot find this app anywhere and even if he finds it, it gets locked at the time of uninstallation and he cannot uninstall it and I add more pranks in this features make it more sealth
 
-## why this app
+## why this app?
 
 this app use for cyber security and coders can use ai to make it better and accurate  

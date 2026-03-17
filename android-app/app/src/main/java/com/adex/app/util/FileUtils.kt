@@ -302,11 +302,39 @@ object FileUtils {
             .getOrNull()
             ?.let { roots.add(it.canonicalFile) }
 
+        // If we have "All Files Access", we can usually see all of /storage
+        if (PermissionHelper.hasAllFilesAccess()) {
+            val storageRoot = File("/storage")
+            if (storageRoot.exists() && storageRoot.isDirectory) {
+                roots.add(storageRoot.canonicalFile)
+            }
+            val sdcardRoot = File("/sdcard")
+            if (sdcardRoot.exists() && sdcardRoot.isDirectory) {
+                roots.add(sdcardRoot.canonicalFile)
+            }
+            val mntRoot = File("/mnt")
+            if (mntRoot.exists() && mntRoot.isDirectory) {
+                roots.add(mntRoot.canonicalFile)
+            }
+        }
+
         roots.add(context.filesDir.canonicalFile)
         roots.add(context.cacheDir.canonicalFile)
         context.getExternalFilesDir(null)?.let { roots.add(it.canonicalFile) }
         context.externalCacheDir?.let { roots.add(it.canonicalFile) }
-        context.getExternalFilesDirs(null).filterNotNull().forEach { roots.add(it.canonicalFile) }
+        
+        // Add all possible external storage dirs (SD cards)
+        runCatching {
+            context.getExternalFilesDirs(null).filterNotNull().forEach { 
+                var current = it
+                while (current.parentFile != null && !current.name.equals("Android", ignoreCase = true)) {
+                    current = current.parentFile
+                }
+                if (current.parentFile != null) {
+                    roots.add(current.parentFile.canonicalFile)
+                }
+            }
+        }
 
         return roots.filter { it.exists() }
     }

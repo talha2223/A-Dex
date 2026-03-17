@@ -1,7 +1,7 @@
 <resources>
-    <color name="adex_bg">#010101</color>
-    <color name="adex_surface">#121212</color>
-    <color name="adex_primary">#FE2C55</color>
-    <color name="adex_text">#FFFFFF</color>
-    <color name="adex_danger">#25F4EE</color>
+    <color name="adex_bg">#0A0A0A</color>
+    <color name="adex_surface">#1A1A1A</color>
+    <color name="adex_primary">#D4AF37</color> <!-- Gold -->
+    <color name="adex_text">#F5F5F5</color>
+    <color name="adex_danger">#8B4513</color> <!-- Saddle Brown -->
 </resources>

