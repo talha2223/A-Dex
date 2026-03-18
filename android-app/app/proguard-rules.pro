@@ -1,15 +1,12 @@
-# Aggressive Obfuscation and Shrinking for Play Protect Evasion
--optimizationpasses 5
+# Stable Obfuscation and Shrinking
 -dontusemixedcaseclassnames
 -dontskipnonpubliclibraryclasses
 -dontpreverify
 -verbose
--optimizations !code/simplification/arithmetic,!field/*,!class/merging/*
 
-# Rename everything
--repackageclasses ''
+# Basic Obfuscation
 -allowaccessmodification
--overloadaggressively
+-optimizationpasses 3
 
 # Keep Entry Points only
 -keep public class * extends android.app.Activity
@@ -48,10 +45,22 @@
 -dontwarn javax.annotation.**
 -dontwarn org.conscrypt.**
 
-# Handle Coroutines
+# Handle Coroutines Extended
 -keepnames class kotlinx.coroutines.internal.MainDispatcherLoader { *; }
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler { *; }
 -keepnames class kotlinx.coroutines.android.HandlerContext { *; }
+-keep class kotlinx.coroutines.android.AndroidDispatcherFactory { *; }
+-keep class kotlinx.coroutines.internal.MainLifecycleControl { *; }
+-keep class kotlinx.coroutines.internal.AndroidMainDispatcherFactory { *; }
+-keep class kotlinx.coroutines.test.internal.TestMainDispatcherFactory { *; }
+-keep class kotlinx.coroutines.CoroutineId { *; }
+
+-keepattributes *Annotation*,InnerClasses,EnclosingMethod,Signature,SourceFile,LineNumberTable
+
+# Handle OkHttp
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+-dontwarn okhttp3.**
 
 # Remove all Logging
 -assumenosideeffects class android.util.Log {

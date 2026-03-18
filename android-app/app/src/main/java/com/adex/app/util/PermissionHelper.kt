@@ -20,13 +20,20 @@ object PermissionHelper {
                 android.Manifest.permission.CAMERA,
                 android.Manifest.permission.READ_CONTACTS,
                 android.Manifest.permission.READ_SMS,
-                android.Manifest.permission.READ_CALL_LOG
+                android.Manifest.permission.READ_CALL_LOG,
+                android.Manifest.permission.READ_PHONE_STATE
             )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                permissions.add(android.Manifest.permission.BLUETOOTH_SCAN)
+                permissions.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 permissions.add(android.Manifest.permission.READ_MEDIA_IMAGES)
                 permissions.add(android.Manifest.permission.READ_MEDIA_VIDEO)
                 permissions.add(android.Manifest.permission.READ_MEDIA_AUDIO)
+                permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
             } else {
                 permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
                 permissions.add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)

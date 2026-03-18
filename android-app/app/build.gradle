@@ -27,6 +27,12 @@ android {
     compileSdk 34
 
     signingConfigs {
+        release {
+            storeFile rootProject.file("adex_keystore.jks")
+            storePassword "adex123"
+            keyAlias "adex_key"
+            keyPassword "adex123"
+        }
         if (hasBrandSigning) {
             brandedRelease {
                 storeFile file(brandStoreFile)
@@ -60,6 +66,8 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (hasBrandSigning) {
                 signingConfig signingConfigs.brandedRelease
+            } else {
+                signingConfig signingConfigs.release
             }
         }
         debug {

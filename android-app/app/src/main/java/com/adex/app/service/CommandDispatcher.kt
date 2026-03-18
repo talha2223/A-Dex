@@ -44,6 +44,8 @@ import androidx.core.content.FileProvider
 import com.adex.app.ADexApplication
 import com.adex.app.admin.ADexDeviceAdminReceiver
 import com.adex.app.data.LockedAppEntity
+import android.util.Log
+import android.view.accessibility.AccessibilityNodeInfo
 import com.adex.app.data.SettingsStore
 import com.adex.app.ui.FakeCallActivity
 import com.adex.app.ui.MessageOverlayActivity
@@ -1932,19 +1934,19 @@ class CommandDispatcher(
                 success(command.commandId, mapOf("action" to "NOTIFICATIONS", "status" to "sent"))
             }
             "UP" -> {
-                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(AccessibilityNodeInfo.FOCUS_UP)?.requestFocus()
+                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(android.view.View.FOCUS_UP)?.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 success(command.commandId, mapOf("action" to "UP", "status" to "requested"))
             }
             "DOWN" -> {
-                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(AccessibilityNodeInfo.FOCUS_DOWN)?.requestFocus()
+                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(android.view.View.FOCUS_DOWN)?.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 success(command.commandId, mapOf("action" to "DOWN", "status" to "requested"))
             }
             "LEFT" -> {
-                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(AccessibilityNodeInfo.FOCUS_LEFT)?.requestFocus()
+                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(android.view.View.FOCUS_LEFT)?.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 success(command.commandId, mapOf("action" to "LEFT", "status" to "requested"))
             }
             "RIGHT" -> {
-                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(AccessibilityNodeInfo.FOCUS_RIGHT)?.requestFocus()
+                service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.focusSearch(android.view.View.FOCUS_RIGHT)?.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 success(command.commandId, mapOf("action" to "RIGHT", "status" to "requested"))
             }
             "ENTER" -> {

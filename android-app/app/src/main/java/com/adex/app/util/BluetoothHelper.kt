@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class BluetoothHelper(private val context: Context) {
     private val bluetoothManager: BluetoothManager? by lazy {
-        context.getSystemService(Context.BLUETOOTH_MANAGER) as? BluetoothManager
+        context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
     }
     private val adapter: BluetoothAdapter? by lazy { bluetoothManager?.adapter }
 
